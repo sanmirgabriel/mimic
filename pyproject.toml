@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mimic"
+version = "0.1.0"
+description = "Target-aware wordlist generator for credential attacks. Profiles the human behind the password."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+keywords = ["pentest", "wordlist", "hashcat", "security", "credential-attacks"]
+
+[project.scripts]
+mimic = "mimic.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["mimic*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+ui = ["pyfiglet>=1.0", "rich>=13.0"]
