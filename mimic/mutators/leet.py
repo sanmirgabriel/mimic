@@ -49,9 +49,11 @@ class LeetMutator(Mutator):
             return
 
         if self.mode == "full":
-            chars = list(lower)
+            # Preserve original casing of untouched letters; substitution
+            # chars themselves carry no case (e.g. '@', '3').
+            chars = list(word)
             for idx in positions:
-                chars[idx] = LEET_MAP[chars[idx]]
+                chars[idx] = LEET_MAP[lower[idx]]
             yield "".join(chars)
             return
 
@@ -59,9 +61,9 @@ class LeetMutator(Mutator):
         seen: set[str] = set()
         for count in range(1, min(self.max_subs, len(positions)) + 1):
             for combo in combinations(positions, count):
-                chars = list(lower)
+                chars = list(word)
                 for idx in combo:
-                    chars[idx] = LEET_MAP[chars[idx]]
+                    chars[idx] = LEET_MAP[lower[idx]]
                 result = "".join(chars)
                 if result not in seen:
                     seen.add(result)

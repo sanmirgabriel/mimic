@@ -60,3 +60,20 @@ def test_no_eligible_chars(partial_mutator: LeetMutator) -> None:
     """Word with no leet-eligible chars yields original."""
     results = list(partial_mutator.mutate("hymn"))
     assert results == ["hymn"]
+
+
+def test_partial_preserves_original_casing(partial_mutator: LeetMutator) -> None:
+    """Untouched letters keep their original case; only leet-able ones change."""
+    results = list(partial_mutator.mutate("Pedro"))
+    # 'e' (idx1) and 'o' (idx4) are eligible; 'P', 'd', 'r' must stay as-is.
+    assert "P3dro" in results
+    assert "Pedr0" in results
+    assert "P3dr0" in results
+    assert "p3dro" not in results  # would mean case got dropped
+
+
+def test_full_preserves_original_casing() -> None:
+    """Full mode also keeps case on characters it doesn't substitute."""
+    m = LeetMutator(mode="full")
+    results = list(m.mutate("PEDRO"))
+    assert results == ["P3DR0"]

@@ -76,6 +76,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Auto-generate year numbers, e.g. 2018:2026.",
     )
     p.add_argument(
+        "--max-per-word",
+        type=int,
+        default=5000,
+        metavar="N",
+        help="Cap on candidates produced per base word by the mutation "
+             "pipeline, enforced after every stage (default: 5000).",
+    )
+    p.add_argument(
         "--quiet", "-q",
         action="store_true",
         help="Suppress progress messages on stderr.",
@@ -186,15 +194,21 @@ def main(argv: list[str] | None = None) -> int:
             logger.error("I/O error writing rules: %s", exc)
             return 2
 
-    # --- Build mutator pipeline ---
-    mutators: list[Mutator] = [
+    # --- Build the composed mutation pipeline ---
+    # Fixed order: case variations feed into leet substitution, then
+    # affixing — so a candidate can accumulate all three (e.g. "P3dro0905@")
+    # instead of each mutator only ever transforming the original word.
+    stages: list[Mutator] = [
         CaseMutator(),
         LeetMutator(mode=args.leet),
-        ReverseMutator(),
         AffixMutator(numbers=numbers, separators=args.separators),
     ]
-    if args.combine:
-        mutators.append(CombineMutator(all_names=names, separators=args.separators))
+    combine = (
+        CombineMutator(all_names=names, separators=args.separators)
+        if args.combine
+        else None
+    )
+    reverse = ReverseMutator()
 
     policy = PasswordPolicy(
         min_len=args.min_len,
@@ -205,7 +219,14 @@ def main(argv: list[str] | None = None) -> int:
         require_special=args.require_special,
     )
 
-    generator = Generator(base_words=names, mutators=mutators, policy=policy)
+    generator = Generator(
+        base_words=names,
+        stages=stages,
+        policy=policy,
+        combine=combine,
+        reverse=reverse,
+        max_candidates_per_word=args.max_per_word,
+    )
     sink = Sink(output_path=args.output)
 
     try:
