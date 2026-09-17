@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 from mimic.core.generator import Generator
@@ -17,6 +18,7 @@ from mimic.mutators.combine import CombineMutator
 from mimic.mutators.leet import LeetMutator
 from mimic.mutators.reverse import ReverseMutator
 from mimic import __version__
+from mimic.profile.loader import ProfilePlan, build_plan, explain_candidate, load_profile_file
 from mimic.rules.hashcat import export_rules
 from mimic.ui.banner import print_banner
 
@@ -84,6 +86,20 @@ def _build_parser() -> argparse.ArgumentParser:
              "pipeline, enforced after every stage (default: 5000).",
     )
     p.add_argument(
+        "--profile",
+        metavar="FILE",
+        help="Structured target profile (.yaml/.yml/.json). Coexists with "
+             "--names: profile fields add to whatever --names/--numbers "
+             "already provide.",
+    )
+    p.add_argument(
+        "--debug",
+        action="store_true",
+        help="Log which profile field(s) likely produced each candidate "
+             "(only meaningful together with --profile). Implies verbose "
+             "logging even under --quiet.",
+    )
+    p.add_argument(
         "--quiet", "-q",
         action="store_true",
         help="Suppress progress messages on stderr.",
@@ -132,8 +148,10 @@ def main(argv: list[str] | None = None) -> int:
     if not args.quiet and not args.no_banner:
         print_banner()
 
-    # Configure logging: stderr only, suppressed by --quiet.
-    log_level = logging.WARNING if args.quiet else logging.INFO
+    # Configure logging: stderr only, suppressed by --quiet (unless --debug).
+    log_level = logging.DEBUG if args.debug else (
+        logging.WARNING if args.quiet else logging.INFO
+    )
     logging.basicConfig(
         level=log_level,
         format="[mimic] %(message)s",
@@ -141,18 +159,19 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     # --- Load names ---
+    # Stdin is only consulted when neither --names nor --profile is given --
+    # a --profile-only run must not block waiting for input that isn't coming.
     try:
         if args.names:
             names = _read_lines(args.names)
-        else:
+        elif not args.profile:
             names = [
                 line.strip()
                 for line in sys.stdin
                 if line.strip()
             ]
-        if not names:
-            logger.error("No names provided.")
-            return 1
+        else:
+            names = []
     except FileNotFoundError as exc:
         logger.error("Names file not found: %s", exc)
         return 1
@@ -178,6 +197,31 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             logger.error("%s", exc)
             return 1
+
+    # --- Load profile (optional; merges into names/numbers, plus isolated
+    # seeds that must never be cross-combined by --combine) ---
+    isolated_seeds: list[str] = []
+    plan: ProfilePlan | None = None
+    if args.profile:
+        try:
+            profile = load_profile_file(args.profile)
+            plan = build_plan(profile)
+        except FileNotFoundError as exc:
+            logger.error("Profile file not found: %s", exc)
+            return 1
+        except (ValueError, ImportError) as exc:
+            logger.error("%s", exc)
+            return 1
+        except OSError as exc:
+            logger.error("I/O error reading profile: %s", exc)
+            return 2
+        names.extend(plan.base_words)
+        numbers.extend(plan.numbers)
+        isolated_seeds.extend(plan.isolated_seeds)
+
+    if not names and not isolated_seeds:
+        logger.error("No names provided.")
+        return 1
 
     # --- Export hashcat rules mode ---
     if args.export_rules:
@@ -225,18 +269,43 @@ def main(argv: list[str] | None = None) -> int:
         policy=policy,
         combine=combine,
         reverse=reverse,
+        isolated_seeds=isolated_seeds,
         max_candidates_per_word=args.max_per_word,
     )
     sink = Sink(output_path=args.output)
 
+    candidates = generator.generate()
+    if args.debug and plan is not None:
+        candidates = _trace(candidates, plan, leet_mode=args.leet)
+
     try:
-        count = sink.drain(generator.generate())
+        count = sink.drain(candidates)
         logger.info("Generated %d candidates.", count)
     except OSError as exc:
         logger.error("I/O error during output: %s", exc)
         return 2
 
     return 0
+
+
+_UNTRACEABLE = (
+    "origem não rastreável (sem correspondência via match literal ou leet -- "
+    "pode ter passado por reverse/combine, ou não ter vindo do perfil)"
+)
+
+
+def _trace(candidates: Iterator[str], plan: ProfilePlan, leet_mode: str) -> Iterator[str]:
+    """Log, for each candidate, which profile field(s) likely produced it.
+
+    Always logs one line per candidate -- silence would hide the gap cases
+    ``explain_candidate`` can't cover (see its docstring), and a missing
+    log line is easy to misread as "this candidate is unrelated to the
+    profile" when it might just be a heuristic miss.
+    """
+    for candidate in candidates:
+        explanation = explain_candidate(candidate, plan, leet_mode=leet_mode)
+        logger.debug("%s <- %s", candidate, explanation or _UNTRACEABLE)
+        yield candidate
 
 
 if __name__ == "__main__":

@@ -180,6 +180,24 @@ def test_no_truncation_warning_when_cap_not_hit(caplog) -> None:
     )
 
 
+def test_isolated_seeds_go_through_pipeline_but_not_combine() -> None:
+    """isolated_seeds get case/leet/affix like any seed, but never cross-combine."""
+    from mimic.mutators.combine import CombineMutator
+
+    gen = Generator(
+        base_words=["joao"],
+        stages=[CaseMutator()],
+        combine=CombineMutator(all_names=["joao"], separators=""),
+        isolated_seeds=["flamengo"],
+    )
+    results = list(gen.generate())
+    # isolated seed still went through the Case stage.
+    assert "FLAMENGO" in results
+    # ...but was never cross-combined with the (only) base word.
+    assert "joaoflamengo" not in results
+    assert "flamengojoao" not in results
+
+
 def test_reverse_is_independent_of_staged_pipeline() -> None:
     """reverse applies to the raw seed only, not to case/leet/affix output."""
     from mimic.mutators.reverse import ReverseMutator

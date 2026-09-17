@@ -58,6 +58,8 @@ class Generator:
             sibling seeds before the staged pipeline runs.
         reverse: Optional mutator applied to each seed independently of
             ``stages``.
+        isolated_seeds: Extra seeds that run through ``stages``/``reverse``
+            like any other seed, but are never fed to ``combine``.
         max_candidates_per_word: Ceiling on live candidates per seed,
             enforced after every stage.
     """
@@ -69,6 +71,7 @@ class Generator:
         policy: PasswordPolicy | None = None,
         combine: Mutator | None = None,
         reverse: Mutator | None = None,
+        isolated_seeds: list[str] | None = None,
         max_candidates_per_word: int = _DEFAULT_MAX_CANDIDATES_PER_WORD,
     ) -> None:
         self.base_words = base_words
@@ -76,11 +79,21 @@ class Generator:
         self.policy = policy or PasswordPolicy()
         self.combine = combine
         self.reverse = reverse
+        self.isolated_seeds = isolated_seeds or []
         self.max_candidates_per_word = max_candidates_per_word
 
     def _seeds(self) -> Iterator[str]:
-        """Yield each base word plus, when ``combine`` is set, its cross-combinations."""
+        """Yield base words, isolated seeds, and (if ``combine`` is set) cross-combinations.
+
+        ``isolated_seeds`` still runs through the full staged pipeline like
+        any other seed -- it's only excluded from ``combine``, which cross-
+        pairs exclusively within ``base_words``. This lets a caller feed in
+        a value that should never be cross-combined with unrelated seeds
+        (e.g. a football team name has no business being concatenated with
+        a pet's name) without the Generator needing to know *why*.
+        """
         yield from self.base_words
+        yield from self.isolated_seeds
         if self.combine is not None:
             for word in self.base_words:
                 yield from self.combine.mutate(word)

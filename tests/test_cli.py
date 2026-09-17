@@ -73,6 +73,139 @@ def test_cli_missing_names_file() -> None:
     assert exit_code == 1
 
 
+def test_cli_with_profile_only(tmp_path: Path) -> None:
+    """--profile alone (no --names) supplies both a name and a date-derived number."""
+    profile_file = tmp_path / "profile.json"
+    profile_file.write_text(
+        '{"time_futebol": "Flamengo", "data_nascimento": "05/09/2000"}',
+        encoding="utf-8",
+    )
+    output_file = tmp_path / "out.txt"
+
+    exit_code = main([
+        "--profile", str(profile_file),
+        "--output", str(output_file),
+        "--leet", "none",
+        "--separators", "@",
+        "--quiet",
+    ])
+
+    assert exit_code == 0
+    lines = output_file.read_text(encoding="utf-8").splitlines()
+    assert "Flamengo@0905" in lines
+
+
+def test_cli_profile_coexists_with_names(tmp_path: Path) -> None:
+    """--profile and --names can be combined; both contribute seeds."""
+    names_file = tmp_path / "names.txt"
+    names_file.write_text("joao\n", encoding="utf-8")
+    profile_file = tmp_path / "profile.json"
+    profile_file.write_text('{"time_futebol": "Flamengo"}', encoding="utf-8")
+    output_file = tmp_path / "out.txt"
+
+    exit_code = main([
+        "--names", str(names_file),
+        "--profile", str(profile_file),
+        "--output", str(output_file),
+        "--leet", "none",
+        "--quiet",
+    ])
+
+    assert exit_code == 0
+    lines = output_file.read_text(encoding="utf-8").splitlines()
+    assert "joao" in lines
+    assert "Flamengo" in lines
+
+
+def test_cli_debug_logs_field_provenance_leet_none(tmp_path: Path, caplog) -> None:
+    """--debug with --profile logs which field(s) produced a matching candidate (--leet none)."""
+    import logging
+
+    profile_file = tmp_path / "profile.json"
+    profile_file.write_text(
+        '{"time_futebol": "Flamengo", "data_nascimento": "05/09/2000"}',
+        encoding="utf-8",
+    )
+    output_file = tmp_path / "out.txt"
+
+    with caplog.at_level(logging.DEBUG, logger="mimic"):
+        exit_code = main([
+            "--profile", str(profile_file),
+            "--output", str(output_file),
+            "--leet", "none",
+            "--separators", "@",
+            "--debug",
+        ])
+
+    assert exit_code == 0
+    trace_lines = [
+        r.getMessage() for r in caplog.records if "Flamengo@0905" in r.getMessage()
+    ]
+    assert trace_lines
+    assert "time_futebol=Flamengo" in trace_lines[0]
+    assert "data_nascimento=05/09/2000" in trace_lines[0]
+
+
+def test_cli_debug_logs_field_provenance_leet_partial(tmp_path: Path, caplog) -> None:
+    """Same profile, but with --leet partial (the actual CLI default).
+
+    Regression test for the traceability gap: the seed "Flamengo" itself
+    gets leet-substituted (e.g. "Fl@mengo"), so a literal-only match would
+    silently lose the time_futebol attribution and report only the date.
+    """
+    import logging
+
+    profile_file = tmp_path / "profile.json"
+    profile_file.write_text(
+        '{"time_futebol": "Flamengo", "data_nascimento": "05/09/2000"}',
+        encoding="utf-8",
+    )
+    output_file = tmp_path / "out.txt"
+
+    with caplog.at_level(logging.DEBUG, logger="mimic"):
+        exit_code = main([
+            "--profile", str(profile_file),
+            "--output", str(output_file),
+            "--leet", "partial",
+            "--separators", "@",
+            "--debug",
+        ])
+
+    assert exit_code == 0
+    trace_lines = [
+        r.getMessage() for r in caplog.records if "Fl@mengo0905" in r.getMessage()
+    ]
+    assert trace_lines, "expected a trace line for the leet-substituted candidate"
+    assert "time_futebol=Flamengo" in trace_lines[0]
+    assert "data_nascimento=05/09/2000" in trace_lines[0]
+
+
+def test_cli_debug_flags_untraceable_candidate(tmp_path: Path, caplog) -> None:
+    """A candidate explain_candidate can't attribute (here: reversed by
+    ReverseMutator) must be logged as explicitly untraceable, not skipped.
+    """
+    import logging
+
+    profile_file = tmp_path / "profile.json"
+    profile_file.write_text('{"time_futebol": "Flamengo"}', encoding="utf-8")
+    output_file = tmp_path / "out.txt"
+
+    with caplog.at_level(logging.DEBUG, logger="mimic"):
+        exit_code = main([
+            "--profile", str(profile_file),
+            "--output", str(output_file),
+            "--leet", "none",
+            "--debug",
+        ])
+
+    assert exit_code == 0
+    reversed_trace = [
+        r.getMessage() for r in caplog.records if r.getMessage().startswith("ognemalF")
+    ]
+    assert reversed_trace, "expected a trace line for the reversed candidate"
+    assert "não rastreável" in reversed_trace[0]
+
+
 def test_cli_policy_filters(tmp_path: Path) -> None:
     """CLI respects --min-len and --require-digit flags."""
     names_file = tmp_path / "names.txt"
