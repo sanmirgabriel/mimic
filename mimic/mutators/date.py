@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 from collections.abc import Iterator
 
 from mimic.core.candidate import Candidate, Transformation
@@ -42,8 +43,11 @@ class DateMutator(StructuredMutator):
             )
         day_s, month_s, year_s = match.groups()
         day, month = int(day_s), int(month_s)
-        if not (1 <= day <= 31 and 1 <= month <= 12):
-            raise ValueError(f"Invalid date value: {word!r}")
+        try:
+            # Leap-year sentinel validates yearless dates without emitting a year.
+            date(int(year_s) if year_s is not None else 2000, month, day)
+        except ValueError as exc:
+            raise ValueError(f"Invalid calendar date: {word!r}") from exc
 
         dd, mm = f"{day:02d}", f"{month:02d}"
         d, m = str(day), str(month)

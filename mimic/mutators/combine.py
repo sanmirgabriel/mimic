@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from mimic.core.candidate import Candidate, Transformation, as_candidate
+from mimic.core.candidate import Candidate, Transformation
+from mimic.core.seeds import nonempty_seed, unique_seeds
 from mimic.mutators.base import StructuredMutator
 
 
@@ -26,7 +27,7 @@ class CombineMutator(StructuredMutator):
         all_names: list[str | Candidate],
         separators: str = "@!#_.",
     ) -> None:
-        self._partners = tuple(as_candidate(n) for n in all_names)
+        self._partners = tuple(unique_seeds(all_names))
         self.separators = list(separators)
 
     @property
@@ -39,6 +40,8 @@ class CombineMutator(StructuredMutator):
         return [partner.value.lower() for partner in self._partners]
 
     def mutate_candidate(self, candidate: Candidate) -> Iterator[Candidate]:
+        if nonempty_seed(candidate) is None:
+            return
         w = candidate.value.lower()
         for partner in self._partners:
             other = partner.value.lower()

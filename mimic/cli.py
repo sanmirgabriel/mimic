@@ -76,7 +76,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--year-range",
         metavar="START:END",
-        help="Auto-generate year numbers, e.g. 2018:2026.",
+        help="Auto-generate an inclusive ascending interval of at most 200 years, e.g. 2018:2026.",
     )
     p.add_argument(
         "--max-per-word",
@@ -126,12 +126,22 @@ def _read_lines(path: str) -> list[str]:
     ]
 
 
+_MAX_YEAR_RANGE = 200
+
+
 def _parse_year_range(spec: str) -> list[str]:
-    """Parse ``'START:END'`` into a list of year strings."""
+    """Parse an ascending inclusive interval of at most 200 year tokens."""
     parts = spec.split(":")
     if len(parts) != 2:
         raise ValueError(f"Invalid year-range format: {spec!r}  (expected START:END)")
-    start, end = int(parts[0]), int(parts[1])
+    try:
+        start, end = int(parts[0]), int(parts[1])
+    except ValueError as exc:
+        raise ValueError("year-range endpoints must be integers (START:END)") from exc
+    if end < start:
+        raise ValueError("year-range START must be <= END")
+    if end - start + 1 > _MAX_YEAR_RANGE:
+        raise ValueError(f"year-range must contain at most {_MAX_YEAR_RANGE} years")
     return [str(y) for y in range(start, end + 1)]
 
 
@@ -159,12 +169,11 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     # --- Load names ---
-    # Stdin is only consulted when neither --names nor --profile is given --
-    # a --profile-only run must not block waiting for input that isn't coming.
+    # Profile-only and rule export runs never wait for implicit stdin input.
     try:
         if args.names:
             names = _read_lines(args.names)
-        elif not args.profile:
+        elif not args.profile and not args.export_rules:
             names = [
                 line.strip()
                 for line in sys.stdin
@@ -228,7 +237,7 @@ def main(argv: list[str] | None = None) -> int:
         number_candidates.extend(plan.number_candidates)
         isolated_candidates.extend(plan.isolated_candidates)
 
-    if not names and not isolated_seeds:
+    if not args.export_rules and not names and not isolated_seeds:
         logger.error("No names provided.")
         return 1
 
@@ -263,24 +272,28 @@ def main(argv: list[str] | None = None) -> int:
     )
     reverse = ReverseMutator()
 
-    policy = PasswordPolicy(
-        min_len=args.min_len,
-        max_len=args.max_len,
-        require_upper=args.require_upper,
-        require_lower=args.require_lower,
-        require_digit=args.require_digit,
-        require_special=args.require_special,
-    )
+    try:
+        policy = PasswordPolicy(
+            min_len=args.min_len,
+            max_len=args.max_len,
+            require_upper=args.require_upper,
+            require_lower=args.require_lower,
+            require_digit=args.require_digit,
+            require_special=args.require_special,
+        )
 
-    generator = Generator(
-        base_words=base_candidates,
-        stages=stages,
-        policy=policy,
-        combine=combine,
-        reverse=reverse,
-        isolated_seeds=isolated_candidates,
-        max_candidates_per_word=args.max_per_word,
-    )
+        generator = Generator(
+            base_words=base_candidates,
+            stages=stages,
+            policy=policy,
+            combine=combine,
+            reverse=reverse,
+            isolated_seeds=isolated_candidates,
+            max_candidates_per_word=args.max_per_word,
+        )
+    except (ValueError, TypeError) as exc:
+        logger.error("Invalid generation configuration: %s", exc)
+        return 1
     sink = Sink(output_path=args.output)
 
     candidates = generator.generate()

@@ -5,15 +5,14 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 
-from mimic.core.candidate import Candidate, as_candidate
+from mimic.core.candidate import Candidate
+from mimic.core.seeds import unique_seeds
 from mimic.core.policy import PasswordPolicy
 from mimic.mutators.base import Mutator
 
 logger = logging.getLogger(__name__)
 
-# Threshold: if the estimated output could exceed this, we still use a set
-# for dedup but flush periodically.  For truly huge runs a bloom filter would
-# be better, but we avoid external deps per the spec.
+# Warning only: the global dedup set retains values for the entire stream.
 _DEDUP_WARN_THRESHOLD = 100_000
 
 # Default ceiling on how many candidates a single base word may produce
@@ -75,6 +74,10 @@ class Generator:
         isolated_seeds: list[str | Candidate] | None = None,
         max_candidates_per_word: int = _DEFAULT_MAX_CANDIDATES_PER_WORD,
     ) -> None:
+        if type(max_candidates_per_word) is not int:
+            raise TypeError("max_candidates_per_word must be an integer")
+        if max_candidates_per_word < 1:
+            raise ValueError("max_candidates_per_word must be >= 1")
         self.base_words = base_words
         self.stages = stages
         self.policy = policy or PasswordPolicy()
@@ -93,13 +96,11 @@ class Generator:
         (e.g. a football team name has no business being concatenated with
         a pet's name) without the Generator needing to know *why*.
         """
-        for word in self.base_words:
-            yield as_candidate(word)
-        for word in self.isolated_seeds:
-            yield as_candidate(word)
+        yield from unique_seeds(self.base_words)
+        yield from unique_seeds(self.isolated_seeds)
         if self.combine is not None:
-            for word in self.base_words:
-                yield from self.combine.mutate_candidate(as_candidate(word))
+            for word in unique_seeds(self.base_words):
+                yield from self.combine.mutate_candidate(word)
 
     def _compose(self, seed: Candidate) -> list[Candidate]:
         """Run *seed* through ``stages`` in sequence, capping the frontier each step.
@@ -150,7 +151,7 @@ class Generator:
 
     def _raw_candidates(self) -> Iterator[Candidate]:
         """Yield every candidate produced by the composed pipeline for every seed."""
-        for seed in self._seeds():
+        for seed in unique_seeds(self._seeds()):
             yield from self._compose(seed)
             if self.reverse is not None:
                 yield from self.reverse.mutate_candidate(seed)

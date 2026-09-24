@@ -1,8 +1,8 @@
 """Load a TargetProfile from disk and turn it into generation inputs.
 
 This module is the only place that knows how profile fields map onto
-mutators. ``core/`` never imports from here -- ``profile/`` depends on
-``core/`` (for ``DateMutator``), never the other way around.
+mutators. Profile uses core's generic candidate model and DateMutator from
+``mutators/``. Core never imports profile.
 """
 
 from __future__ import annotations
@@ -38,7 +38,12 @@ def load_profile_file(path: str) -> TargetProfile:
                 "Reading a YAML profile requires PyYAML. Install it with "
                 '`pip install -e ".[profile]"`, or use a .json profile instead.'
             ) from exc
-        data = yaml.safe_load(text) or {}
+        try:
+            data = yaml.safe_load(text)
+        except yaml.YAMLError as exc:
+            raise ValueError("Invalid YAML profile syntax") from exc
+        if data is None:
+            data = {}
     elif p.suffix == ".json":
         data = json.loads(text) if text.strip() else {}
     else:

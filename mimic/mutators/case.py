@@ -1,4 +1,4 @@
-"""Case-based mutations: lower, upper, title, camelCase."""
+"""Case-based mutations: original, lower, upper and title."""
 
 from __future__ import annotations
 
