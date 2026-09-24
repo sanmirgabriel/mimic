@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 
 from mimic.core.candidate import Candidate
+from mimic.core.seed import Seed
 from mimic.core.seeds import unique_seeds
 from mimic.core.policy import PasswordPolicy
 from mimic.mutators.base import Mutator
@@ -73,6 +74,7 @@ class Generator:
         reverse: Mutator | None = None,
         isolated_seeds: list[str | Candidate] | None = None,
         max_candidates_per_word: int = _DEFAULT_MAX_CANDIDATES_PER_WORD,
+        seeds: Iterable[Seed] | None = None,
     ) -> None:
         if type(max_candidates_per_word) is not int:
             raise TypeError("max_candidates_per_word must be an integer")
@@ -85,6 +87,7 @@ class Generator:
         self.reverse = reverse
         self.isolated_seeds = isolated_seeds or []
         self.max_candidates_per_word = max_candidates_per_word
+        self.seeds = seeds if seeds is not None else ()
 
     def _seeds(self) -> Iterator[Candidate]:
         """Yield base words, isolated seeds, and (if ``combine`` is set) cross-combinations.
@@ -155,6 +158,26 @@ class Generator:
             yield from self._compose(seed)
             if self.reverse is not None:
                 yield from self.reverse.mutate_candidate(seed)
+        # New sources are streamed once. Ready candidates bypass every mutator.
+        # Only explicitly combinable seeds enter the optional Combine branch.
+        seen: set[Seed] = set()
+        for spec in self.seeds:
+            if not isinstance(spec, Seed):
+                raise TypeError("seeds must contain Seed objects")
+            if not spec.candidate.value.strip() or spec in seen:
+                continue
+            seen.add(spec)
+            if not spec.mutable:
+                yield spec.candidate
+                continue
+            yield from self._compose(spec.candidate)
+            if self.reverse is not None:
+                yield from self.reverse.mutate_candidate(spec.candidate)
+            if spec.combinable and self.combine is not None:
+                for combined in self.combine.mutate_candidate(spec.candidate):
+                    yield from self._compose(combined)
+                    if self.reverse is not None:
+                        yield from self.reverse.mutate_candidate(combined)
 
     def generate(self) -> Iterator[str]:
         """Backward-compatible textual projection, in exactly the same order."""

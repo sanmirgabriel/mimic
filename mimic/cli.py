@@ -3,23 +3,22 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from collections.abc import Iterator
+from itertools import chain
 from pathlib import Path
 
 from mimic.core.candidate import Candidate, Origin
-from mimic.core.generator import Generator
-from mimic.core.policy import PasswordPolicy
 from mimic.core.sink import Sink
-from mimic.mutators.affix import AffixMutator
-from mimic.mutators.base import Mutator
-from mimic.mutators.case import CaseMutator
-from mimic.mutators.combine import CombineMutator
-from mimic.mutators.leet import LeetMutator
-from mimic.mutators.reverse import ReverseMutator
+from mimic.domain.context import load_context
+from mimic.domain.datasets import DEFAULT_MAX_LINES, stream_dataset, stream_ptbr
+from mimic.domain.models import Generation, GenerationOptions
+from mimic.domain.planning import prepare_generation
 from mimic import __version__
 from mimic.profile.loader import build_plan, load_profile_file
+from mimic.profile.schema import TargetProfile
 from mimic.rules.hashcat import export_rules
 from mimic.ui.banner import print_banner
 
@@ -36,6 +35,16 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help="File with base names/keywords, one per line. Reads stdin if omitted.",
     )
+    p.add_argument("-n", "--name", action="append", default=[], help="Target name (repeatable).")
+    p.add_argument("-d", "--birth-date", help="Birth date, DD/MM or DD/MM/YYYY.")
+    p.add_argument("-t", "--team", help="Target's football team.")
+    p.add_argument("-p", "--pet", help="Target's pet name.")
+    p.add_argument("-c", "--company", help="Target's company.")
+    p.add_argument("--context", help="Deterministic field:value context file.")
+    p.add_argument("--dataset", action="append", default=[], help="Local seed corpus (repeatable).")
+    p.add_argument("--candidates", action="append", default=[], help="Ready candidates file (repeatable).")
+    p.add_argument("--max-dataset-lines", type=int, default=DEFAULT_MAX_LINES)
+    p.add_argument("--ptbr", action="store_true", help="Include small built-in PT-BR seed sets.")
     p.add_argument(
         "--numbers",
         metavar="FILE",
@@ -151,6 +160,16 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         Exit code: 0 success, 1 input error, 2 I/O error.
     """
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "profile":
+        profile_parser = argparse.ArgumentParser(prog="mimic profile")
+        profile_commands = profile_parser.add_subparsers(dest="command", required=True)
+        inspect_parser = profile_commands.add_parser("inspect", help="Show parsed profile/context")
+        inspect_parser.add_argument("path")
+        profile_args = profile_parser.parse_args(argv[1:])
+        return _inspect_profile(profile_args.path)
+    if argv and argv[0] == "generate":
+        argv = argv[1:]
     parser = _build_parser()
     args = parser.parse_args(argv)
 
@@ -173,7 +192,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.names:
             names = _read_lines(args.names)
-        elif not args.profile and not args.export_rules:
+        elif not (args.profile or args.export_rules or args.name or args.context
+                  or args.dataset or args.candidates or args.ptbr or args.birth_date
+                  or args.team or args.pet or args.company):
             names = [
                 line.strip()
                 for line in sys.stdin
@@ -201,6 +222,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     base_candidates = [Candidate(n, (Origin("cli", "names", n),)) for n in names]
+    if args.name:
+        for name in args.name:
+            value = name.strip()
+            if value:
+                base_candidates.append(Candidate(value, (Origin("manual", "nome", value),)))
+                names.append(value)
     number_candidates = [Candidate(n, (Origin("cli", "numbers", n),)) for n in numbers]
     if args.year_range:
         try:
@@ -237,7 +264,28 @@ def main(argv: list[str] | None = None) -> int:
         number_candidates.extend(plan.number_candidates)
         isolated_candidates.extend(plan.isolated_candidates)
 
-    if not args.export_rules and not names and not isolated_seeds:
+    inline = {"data_nascimento": args.birth_date, "time_futebol": args.team,
+              "pet": args.pet, "empresa": args.company}
+    try:
+        inline_plan = build_plan(TargetProfile.from_dict(inline))
+        isolated_candidates.extend(inline_plan.isolated_candidates)
+        number_candidates.extend(inline_plan.number_candidates)
+        numbers.extend(inline_plan.numbers)
+        facts = load_context(args.context) if args.context else []
+        if args.max_dataset_lines < 1:
+            raise ValueError("max-dataset-lines must be >= 1")
+    except FileNotFoundError as exc:
+        logger.error("Context file not found: %s", exc)
+        return 1
+    except (ValueError, TypeError) as exc:
+        logger.error("Invalid context: %s", exc)
+        return 1
+    except OSError as exc:
+        logger.error("I/O error reading context: %s", exc)
+        return 2
+
+    if not args.export_rules and not (names or isolated_seeds or isolated_candidates
+                                     or facts or args.dataset or args.candidates or args.ptbr):
         logger.error("No names provided.")
         return 1
 
@@ -256,24 +304,10 @@ def main(argv: list[str] | None = None) -> int:
             logger.error("I/O error writing rules: %s", exc)
             return 2
 
-    # --- Build the composed mutation pipeline ---
-    # Fixed order: case variations feed into leet substitution, then
-    # affixing — so a candidate can accumulate all three (e.g. "P3dro0905@")
-    # instead of each mutator only ever transforming the original word.
-    stages: list[Mutator] = [
-        CaseMutator(),
-        LeetMutator(mode=args.leet),
-        AffixMutator(numbers=number_candidates, separators=args.separators),
-    ]
-    combine = (
-        CombineMutator(all_names=base_candidates, separators=args.separators)
-        if args.combine
-        else None
-    )
-    reverse = ReverseMutator()
-
     try:
-        policy = PasswordPolicy(
+        options = GenerationOptions(
+            leet_mode=args.leet, combine=args.combine, separators=args.separators,
+            max_candidates_per_word=args.max_per_word,
             min_len=args.min_len,
             max_len=args.max_len,
             require_upper=args.require_upper,
@@ -282,15 +316,18 @@ def main(argv: list[str] | None = None) -> int:
             require_special=args.require_special,
         )
 
-        generator = Generator(
-            base_words=base_candidates,
-            stages=stages,
-            policy=policy,
-            combine=combine,
-            reverse=reverse,
-            isolated_seeds=isolated_candidates,
-            max_candidates_per_word=args.max_per_word,
+        extra = chain(
+            *(stream_dataset(path, ready=True, max_lines=args.max_dataset_lines)
+              for path in args.candidates),
+            *(stream_dataset(path, max_lines=args.max_dataset_lines) for path in args.dataset),
+            stream_ptbr() if args.ptbr else (),
         )
+        generator = prepare_generation(
+            Generation(options=options, output_path=args.output),
+            base_candidates=base_candidates, isolated_candidates=isolated_candidates,
+            number_candidates=number_candidates, context_facts=facts,
+            extra_seeds=extra,
+        ).generator
     except (ValueError, TypeError) as exc:
         logger.error("Invalid generation configuration: %s", exc)
         return 1
@@ -303,10 +340,39 @@ def main(argv: list[str] | None = None) -> int:
     try:
         count = sink.drain(candidates)
         logger.info("Generated %d candidates.", count)
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         logger.error("I/O error during output: %s", exc)
         return 2
+    except ValueError as exc:
+        logger.error("Invalid dataset: %s", exc)
+        return 1
 
+    return 0
+
+
+def _inspect_profile(path: str) -> int:
+    try:
+        if Path(path).suffix.lower() == ".txt":
+            facts = load_context(path)
+            data: dict[str, object] = {}
+            for fact in facts:
+                if fact.field == "apelidos":
+                    data.setdefault("apelidos", []).append(fact.candidate.value)
+                elif fact.field in data:
+                    previous = data[fact.field]
+                    if isinstance(previous, list):
+                        previous.append(fact.candidate.value)
+                    else:
+                        data[fact.field] = [previous, fact.candidate.value]
+                else:
+                    data[fact.field] = fact.candidate.value
+        else:
+            from dataclasses import asdict
+            data = asdict(load_profile_file(path))
+    except (OSError, ValueError, ImportError) as exc:
+        logger.error("Cannot inspect profile: %s", exc)
+        return 1
+    print(json.dumps(data, ensure_ascii=False, indent=2))
     return 0
 
 

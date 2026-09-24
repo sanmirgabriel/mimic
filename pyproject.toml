@@ -17,6 +17,9 @@ mimic = "mimic.cli:main"
 [tool.setuptools.packages.find]
 include = ["mimic*"]
 
+[tool.setuptools.package-data]
+"mimic.data.ptbr" = ["*.txt"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
