@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from mimic.mutators.base import Mutator
+from mimic.core.candidate import Candidate, Transformation, as_candidate
+from mimic.mutators.base import StructuredMutator
 
 
-class CombineMutator(Mutator):
+class CombineMutator(StructuredMutator):
     """Produces cross-combinations of a name with all other names.
 
     For each pair ``(a, b)`` it yields forms commonly seen in usernames
@@ -22,24 +23,46 @@ class CombineMutator(Mutator):
 
     def __init__(
         self,
-        all_names: list[str],
+        all_names: list[str | Candidate],
         separators: str = "@!#_.",
     ) -> None:
-        self.all_names = [n.lower() for n in all_names]
+        self._partners = tuple(as_candidate(n) for n in all_names)
         self.separators = list(separators)
 
-    def mutate(self, word: str) -> Iterator[str]:
-        w = word.lower()
-        for other in self.all_names:
+    @property
+    def all_names(self) -> list[str]:
+        """Legacy lowercase textual introspection; returns a detached list.
+
+        Configure partners through the constructor. Editing this projection
+        does not alter the structured operands or their causal metadata.
+        """
+        return [partner.value.lower() for partner in self._partners]
+
+    def mutate_candidate(self, candidate: Candidate) -> Iterator[Candidate]:
+        w = candidate.value.lower()
+        for partner in self._partners:
+            other = partner.value.lower()
             if other == w:
                 continue
             # Concatenations
-            yield w + other
-            yield other + w
+            yield self._combine(candidate, partner, w + other, "full", "")
+            yield self._combine(partner, candidate, other + w, "full", "")
             # Initial + full
-            yield w[0] + other
-            yield other[0] + w
+            yield self._combine(candidate, partner, w[0] + other, "initial", "")
+            yield self._combine(partner, candidate, other[0] + w, "initial", "")
             # Separated
             for sep in self.separators:
-                yield w + sep + other
-                yield other + sep + w
+                yield self._combine(candidate, partner, w + sep + other, "full", sep)
+                yield self._combine(partner, candidate, other + sep + w, "full", sep)
+
+    @staticmethod
+    def _combine(
+        left: Candidate, right: Candidate, value: str, left_form: str, separator: str,
+    ) -> Candidate:
+        return left.join(right, value, Transformation("combine", (
+            ("left", left.value), ("right", right.value),
+            ("left_form", left_form), ("right_form", "full"),
+            ("normalization", "lower"), ("separator", separator),
+            ("left_steps", str(len(left.transformations))),
+            ("right_steps", str(len(right.transformations))),
+        )))

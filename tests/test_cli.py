@@ -180,10 +180,8 @@ def test_cli_debug_logs_field_provenance_leet_partial(tmp_path: Path, caplog) ->
     assert "data_nascimento=05/09/2000" in trace_lines[0]
 
 
-def test_cli_debug_flags_untraceable_candidate(tmp_path: Path, caplog) -> None:
-    """A candidate explain_candidate can't attribute (here: reversed by
-    ReverseMutator) must be logged as explicitly untraceable, not skipped.
-    """
+def test_cli_debug_traces_reversed_candidate(tmp_path: Path, caplog) -> None:
+    """Reverse now has causal provenance, without reverse string matching."""
     import logging
 
     profile_file = tmp_path / "profile.json"
@@ -203,7 +201,9 @@ def test_cli_debug_flags_untraceable_candidate(tmp_path: Path, caplog) -> None:
         r.getMessage() for r in caplog.records if r.getMessage().startswith("ognemalF")
     ]
     assert reversed_trace, "expected a trace line for the reversed candidate"
-    assert "não rastreável" in reversed_trace[0]
+    assert "profile.time_futebol=Flamengo" in reversed_trace[0]
+    assert "reverse()" in reversed_trace[0]
+    assert "não rastreável" not in reversed_trace[0]
 
 
 def test_cli_policy_filters(tmp_path: Path) -> None:

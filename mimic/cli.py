@@ -8,6 +8,7 @@ import sys
 from collections.abc import Iterator
 from pathlib import Path
 
+from mimic.core.candidate import Candidate, Origin
 from mimic.core.generator import Generator
 from mimic.core.policy import PasswordPolicy
 from mimic.core.sink import Sink
@@ -18,7 +19,7 @@ from mimic.mutators.combine import CombineMutator
 from mimic.mutators.leet import LeetMutator
 from mimic.mutators.reverse import ReverseMutator
 from mimic import __version__
-from mimic.profile.loader import ProfilePlan, build_plan, explain_candidate, load_profile_file
+from mimic.profile.loader import build_plan, load_profile_file
 from mimic.rules.hashcat import export_rules
 from mimic.ui.banner import print_banner
 
@@ -95,8 +96,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--debug",
         action="store_true",
-        help="Log which profile field(s) likely produced each candidate "
-             "(only meaningful together with --profile). Implies verbose "
+        help="Log causal origins and transformations of each candidate. Implies verbose "
              "logging even under --quiet.",
     )
     p.add_argument(
@@ -191,9 +191,15 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("I/O error reading numbers: %s", exc)
         return 2
 
+    base_candidates = [Candidate(n, (Origin("cli", "names", n),)) for n in names]
+    number_candidates = [Candidate(n, (Origin("cli", "numbers", n),)) for n in numbers]
     if args.year_range:
         try:
-            numbers.extend(_parse_year_range(args.year_range))
+            years = _parse_year_range(args.year_range)
+            numbers.extend(years)
+            number_candidates.extend(
+                Candidate(year, (Origin("cli", "year_range", year),)) for year in years
+            )
         except ValueError as exc:
             logger.error("%s", exc)
             return 1
@@ -201,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
     # --- Load profile (optional; merges into names/numbers, plus isolated
     # seeds that must never be cross-combined by --combine) ---
     isolated_seeds: list[str] = []
-    plan: ProfilePlan | None = None
+    isolated_candidates: list[Candidate] = []
     if args.profile:
         try:
             profile = load_profile_file(args.profile)
@@ -218,6 +224,9 @@ def main(argv: list[str] | None = None) -> int:
         names.extend(plan.base_words)
         numbers.extend(plan.numbers)
         isolated_seeds.extend(plan.isolated_seeds)
+        base_candidates.extend(plan.base_candidates)
+        number_candidates.extend(plan.number_candidates)
+        isolated_candidates.extend(plan.isolated_candidates)
 
     if not names and not isolated_seeds:
         logger.error("No names provided.")
@@ -245,10 +254,10 @@ def main(argv: list[str] | None = None) -> int:
     stages: list[Mutator] = [
         CaseMutator(),
         LeetMutator(mode=args.leet),
-        AffixMutator(numbers=numbers, separators=args.separators),
+        AffixMutator(numbers=number_candidates, separators=args.separators),
     ]
     combine = (
-        CombineMutator(all_names=names, separators=args.separators)
+        CombineMutator(all_names=base_candidates, separators=args.separators)
         if args.combine
         else None
     )
@@ -264,19 +273,19 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     generator = Generator(
-        base_words=names,
+        base_words=base_candidates,
         stages=stages,
         policy=policy,
         combine=combine,
         reverse=reverse,
-        isolated_seeds=isolated_seeds,
+        isolated_seeds=isolated_candidates,
         max_candidates_per_word=args.max_per_word,
     )
     sink = Sink(output_path=args.output)
 
     candidates = generator.generate()
-    if args.debug and plan is not None:
-        candidates = _trace(candidates, plan, leet_mode=args.leet)
+    if args.debug:
+        candidates = _trace(generator.generate_candidates())
 
     try:
         count = sink.drain(candidates)
@@ -288,24 +297,18 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-_UNTRACEABLE = (
-    "origem não rastreável (sem correspondência via match literal ou leet -- "
-    "pode ter passado por reverse/combine, ou não ter vindo do perfil)"
-)
-
-
-def _trace(candidates: Iterator[str], plan: ProfilePlan, leet_mode: str) -> Iterator[str]:
-    """Log, for each candidate, which profile field(s) likely produced it.
-
-    Always logs one line per candidate -- silence would hide the gap cases
-    ``explain_candidate`` can't cover (see its docstring), and a missing
-    log line is easy to misread as "this candidate is unrelated to the
-    profile" when it might just be a heuristic miss.
-    """
+def _trace(candidates: Iterator[Candidate]) -> Iterator[str]:
+    """Render recorded causal metadata, without matching the final string."""
     for candidate in candidates:
-        explanation = explain_candidate(candidate, plan, leet_mode=leet_mode)
-        logger.debug("%s <- %s", candidate, explanation or _UNTRACEABLE)
-        yield candidate
+        origins = " + ".join(
+            f"{origin.source}.{origin.field}={origin.value}" for origin in candidate.origins
+        )
+        steps = " -> ".join(
+            f"{step.kind}({', '.join(f'{k}={v}' for k, v in step.params)})"
+            for step in candidate.transformations
+        )
+        logger.debug("%s <- %s | %s", candidate.value, origins or "no origin supplied", steps)
+        yield candidate.value
 
 
 if __name__ == "__main__":
