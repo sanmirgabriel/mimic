@@ -2,7 +2,7 @@
 
 Deliberately a plain ``dataclass`` instead of pydantic: the profile shape
 is small and flat (five scalar fields plus one list), so hand-rolled
-validation in ``from_dict`` covers it without adding a validation-engine
+construction validation covers it without adding a validation-engine
 dependency. It also keeps the core install dependency-free -- only
 ``--profile`` users pull in the (separate, optional) YAML dependency, see
 ``loader.py``.
@@ -28,26 +28,38 @@ class TargetProfile:
     empresa: str | None = None
     pet: str | None = None
 
+    def __post_init__(self) -> None:
+        for name in ("nome", "data_nascimento", "time_futebol", "empresa", "pet"):
+            value = getattr(self, name)
+            if value is not None and not isinstance(value, str):
+                raise ValueError(f"'{name}' must be a string or None")
+            normalized = (value.strip() or None) if value is not None else None
+            setattr(self, name, normalized)
+        if not isinstance(self.apelidos, list) or any(
+            not isinstance(value, str) for value in self.apelidos
+        ):
+            raise ValueError("'apelidos' must be a list of strings")
+        self.apelidos = [value.strip() for value in self.apelidos if value.strip()]
+
     @classmethod
     def from_dict(cls, data: dict) -> "TargetProfile":
         """Build a profile from a raw dict (as parsed from YAML/JSON).
 
         Raises:
-            ValueError: on an unknown field name or a malformed ``apelidos``.
+            ValueError: on unknown fields, invalid scalar types or malformed apelidos.
         """
+        if not isinstance(data, dict):
+            raise ValueError("Profile must be a mapping of field -> value")
         known = {f.name for f in fields(cls)}
-        unknown = sorted(set(data) - known)
+        unknown = sorted(set(data) - known, key=str)
         if unknown:
             raise ValueError(
                 f"Unknown profile field(s): {unknown}. "
                 f"Known fields: {sorted(known)}"
             )
-        apelidos = data.get("apelidos", [])
-        if not isinstance(apelidos, list):
-            raise ValueError("'apelidos' must be a list of strings")
         return cls(
             nome=data.get("nome"),
-            apelidos=[str(a) for a in apelidos],
+            apelidos=data.get("apelidos", []),
             data_nascimento=data.get("data_nascimento"),
             time_futebol=data.get("time_futebol"),
             empresa=data.get("empresa"),

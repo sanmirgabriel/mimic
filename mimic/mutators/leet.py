@@ -40,8 +40,9 @@ class LeetMutator(StructuredMutator):
             yield candidate
             return
 
-        lower = word.lower()
-        # Find indices where a leet substitution is possible.
+        # Index original codepoints. A character whose lowercase expands
+        # (e.g. İ -> i + combining dot) is not an entry in LEET_MAP.
+        lower = [ch.lower() for ch in word]
         positions: list[int] = [
             i for i, ch in enumerate(lower) if ch in LEET_MAP
         ]
@@ -66,7 +67,7 @@ class LeetMutator(StructuredMutator):
                     yield result
 
     def _substitute(
-        self, candidate: Candidate, lower: str, positions: list[int] | tuple[int, ...]
+        self, candidate: Candidate, lower: list[str], positions: list[int] | tuple[int, ...]
     ) -> Candidate:
         chars = list(candidate.value)
         transformations = []
