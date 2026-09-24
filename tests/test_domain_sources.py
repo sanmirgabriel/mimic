@@ -6,6 +6,7 @@ import ast
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -269,6 +270,6 @@ def test_new_source_order_is_hash_seed_independent(tmp_path):
     outputs = []
     for seed in ("1", "777"):
         env = {**os.environ, "PYTHONHASHSEED": seed, "PYTHONDONTWRITEBYTECODE": "1"}
-        outputs.append(subprocess.check_output([str(Path(__file__).parents[1] / "venv/bin/python"),
+        outputs.append(subprocess.check_output([sys.executable,
                                                 "-B", "-c", script], env=env, text=True))
     assert outputs[0] == outputs[1]
