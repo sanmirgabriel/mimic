@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 
+from mimic.core.candidate import Candidate, as_candidate
 from mimic.core.policy import PasswordPolicy
 from mimic.mutators.base import Mutator
 
@@ -41,7 +42,7 @@ class Generator:
        combinatorial explosion).
     2. Each seed is pushed through ``stages`` in order. At every stage the
        set of live candidates ("frontier") is expanded by calling
-       ``stage.mutate()`` on each one, then truncated to
+       ``stage.mutate_candidate()`` on each one, then truncated to
        ``max_candidates_per_word`` before moving to the next stage.
     3. ``reverse`` (if given) is applied directly to each seed as a cheap,
        independent branch — reversing *after* case/leet/affix has already
@@ -66,12 +67,12 @@ class Generator:
 
     def __init__(
         self,
-        base_words: list[str],
+        base_words: list[str | Candidate],
         stages: list[Mutator],
         policy: PasswordPolicy | None = None,
         combine: Mutator | None = None,
         reverse: Mutator | None = None,
-        isolated_seeds: list[str] | None = None,
+        isolated_seeds: list[str | Candidate] | None = None,
         max_candidates_per_word: int = _DEFAULT_MAX_CANDIDATES_PER_WORD,
     ) -> None:
         self.base_words = base_words
@@ -82,7 +83,7 @@ class Generator:
         self.isolated_seeds = isolated_seeds or []
         self.max_candidates_per_word = max_candidates_per_word
 
-    def _seeds(self) -> Iterator[str]:
+    def _seeds(self) -> Iterator[Candidate]:
         """Yield base words, isolated seeds, and (if ``combine`` is set) cross-combinations.
 
         ``isolated_seeds`` still runs through the full staged pipeline like
@@ -92,13 +93,15 @@ class Generator:
         (e.g. a football team name has no business being concatenated with
         a pet's name) without the Generator needing to know *why*.
         """
-        yield from self.base_words
-        yield from self.isolated_seeds
+        for word in self.base_words:
+            yield as_candidate(word)
+        for word in self.isolated_seeds:
+            yield as_candidate(word)
         if self.combine is not None:
             for word in self.base_words:
-                yield from self.combine.mutate(word)
+                yield from self.combine.mutate_candidate(as_candidate(word))
 
-    def _compose(self, seed: str) -> list[str]:
+    def _compose(self, seed: Candidate) -> list[Candidate]:
         """Run *seed* through ``stages`` in sequence, capping the frontier each step.
 
         When a stage's cap is hit before every candidate in the incoming
@@ -110,18 +113,18 @@ class Generator:
         counting them would mean generating them, defeating the point of
         the cap).
         """
-        frontier: list[str] = [seed]
+        frontier: list[Candidate] = [seed]
         for stage in self.stages:
-            next_frontier: list[str] = []
+            next_frontier: list[Candidate] = []
             stage_seen: set[str] = set()
             candidates_processed = 0
             cap_hit = False
             for candidate in frontier:
                 candidates_processed += 1
-                for out in stage.mutate(candidate):
-                    if out in stage_seen:
+                for out in stage.mutate_candidate(candidate):
+                    if out.value in stage_seen:
                         continue
-                    stage_seen.add(out)
+                    stage_seen.add(out.value)
                     next_frontier.append(out)
                     if len(next_frontier) >= self.max_candidates_per_word:
                         cap_hit = True
@@ -137,7 +140,7 @@ class Generator:
                     "when the cap hit may also have had further outputs "
                     "that were never generated).",
                     type(stage).__name__,
-                    seed,
+                    seed.value,
                     self.max_candidates_per_word,
                     skipped,
                     len(frontier),
@@ -145,25 +148,31 @@ class Generator:
             frontier = next_frontier
         return frontier
 
-    def _raw_candidates(self) -> Iterator[str]:
+    def _raw_candidates(self) -> Iterator[Candidate]:
         """Yield every candidate produced by the composed pipeline for every seed."""
         for seed in self._seeds():
             yield from self._compose(seed)
             if self.reverse is not None:
-                yield from self.reverse.mutate(seed)
+                yield from self.reverse.mutate_candidate(seed)
 
     def generate(self) -> Iterator[str]:
-        """Yield unique, policy-compliant passwords in a streaming fashion.
+        """Backward-compatible textual projection, in exactly the same order."""
+        for candidate in self.generate_candidates():
+            yield candidate.value
 
-        Deduplication uses an in-memory set.  A warning is logged when the
-        set grows past the threshold.
+    def generate_candidates(self) -> Iterator[Candidate]:
+        """Yield unique, policy-compliant candidates with causal provenance.
+
+        First causal derivation wins at both stage and global value dedup.
+        Alternative derivations are not aggregated. Dedup still precedes
+        policy, and its in-memory set has the same lifetime as this stream.
         """
         seen: set[str] = set()
         warned = False
         for candidate in self._raw_candidates():
-            if candidate in seen:
+            if candidate.value in seen:
                 continue
-            seen.add(candidate)
+            seen.add(candidate.value)
             if not warned and len(seen) > _DEDUP_WARN_THRESHOLD:
                 logger.warning(
                     "Dedup set exceeded %d entries; consider narrowing "
@@ -171,5 +180,5 @@ class Generator:
                     _DEDUP_WARN_THRESHOLD,
                 )
                 warned = True
-            if self.policy.accepts(candidate):
+            if self.policy.accepts(candidate.value):
                 yield candidate

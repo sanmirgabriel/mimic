@@ -11,6 +11,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from mimic.core.candidate import Candidate, Origin
 from mimic.mutators.date import DateMutator
 from mimic.mutators.leet import LeetMutator
 from mimic.profile.schema import TargetProfile
@@ -77,6 +78,11 @@ class ProfilePlan:
     numbers: list[str] = field(default_factory=list)
     seed_field: dict[str, str] = field(default_factory=dict)
     number_field: dict[str, str] = field(default_factory=dict)
+    # Causal inputs. The string lists/maps above remain legacy compatibility
+    # snapshots; new consumers must pass these candidates to the engine.
+    base_candidates: list[Candidate] = field(default_factory=list)
+    isolated_candidates: list[Candidate] = field(default_factory=list)
+    number_candidates: list[Candidate] = field(default_factory=list)
 
 
 def build_plan(profile: TargetProfile) -> ProfilePlan:
@@ -85,10 +91,16 @@ def build_plan(profile: TargetProfile) -> ProfilePlan:
 
     if profile.nome:
         plan.base_words.append(profile.nome)
+        plan.base_candidates.append(Candidate(
+            profile.nome, (Origin("profile", "nome", profile.nome),),
+        ))
         plan.seed_field[profile.nome.lower()] = f"nome={profile.nome}"
 
     for apelido in profile.apelidos:
         plan.base_words.append(apelido)
+        plan.base_candidates.append(Candidate(
+            apelido, (Origin("profile", "apelidos", apelido),),
+        ))
         plan.seed_field[apelido.lower()] = f"apelidos={apelido}"
 
     for field_name, value in (
@@ -98,10 +110,17 @@ def build_plan(profile: TargetProfile) -> ProfilePlan:
     ):
         if value:
             plan.isolated_seeds.append(value)
+            plan.isolated_candidates.append(Candidate(
+                value, (Origin("profile", field_name, value),),
+            ))
             plan.seed_field[value.lower()] = f"{field_name}={value}"
 
     if profile.data_nascimento:
-        tokens = list(DateMutator().mutate(profile.data_nascimento))
+        date = Candidate(profile.data_nascimento, (
+            Origin("profile", "data_nascimento", profile.data_nascimento),
+        ))
+        plan.number_candidates.extend(DateMutator().mutate_candidate(date))
+        tokens = [token.value for token in plan.number_candidates]
         plan.numbers.extend(tokens)
         label = f"data_nascimento={profile.data_nascimento}"
         for token in tokens:
@@ -116,34 +135,12 @@ def explain_candidate(
     leet_mode: str = "none",
     max_subs: int = 2,
 ) -> str | None:
-    """Best-effort reverse-attribution: which profile field(s) likely produced *candidate*.
+    """Deprecated heuristic compatibility API; not used by CLI generation.
 
-    This is a heuristic, substring-based lookup -- it does not track exact
-    provenance through the mutation pipeline (that would require threading
-    metadata through every mutator, coupling ``core/`` to profile concepts).
-    It looks for known seed/number fragments inside the final candidate and
-    reports the fields they came from. Longer matches are preferred over
-    shorter ones to reduce false positives from short, coincidental
-    substrings (e.g. a two-letter pet name matching inside an unrelated
-    word).
+    New callers should inspect Candidate.origins and Candidate.transformations.
+    This helper is retained for existing string-only consumers and can return
+    incomplete attributions. It does not establish causality.
 
-    A literal substring match alone misses candidates that went through
-    ``LeetMutator`` (e.g. seed "Flamengo" -> candidate fragment "Fl@mengo"):
-    the seed text is no longer a substring of the candidate at all. When
-    *leet_mode* is not ``"none"``, this also re-derives the same leet
-    variants of each known seed that ``LeetMutator(mode=leet_mode,
-    max_subs=max_subs)`` would have produced during generation, and checks
-    those too. Because the pipeline composes stages in a fixed order (case
-    -> leet -> affix), a seed's leet-transformed form always survives as one
-    contiguous substring of the final candidate -- so this isn't a fuzzy
-    guess, it's an exact replay of that stage.
-
-    It intentionally does *not* try to cover every mutator (e.g. a
-    reversed seed, or a seed that went through ``combine`` and *then*
-    leet): those remain real gaps. Returns ``None`` in that case rather
-    than a partial, silently-incomplete attribution -- callers should
-    surface that ``None`` explicitly (e.g. "untraceable"), never treat a
-    missing match as "nothing to report".
     """
     lowered = candidate.lower()
     matched_labels: list[str] = []

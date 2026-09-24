@@ -5,12 +5,13 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 
-from mimic.mutators.base import Mutator
+from mimic.core.candidate import Candidate, Transformation
+from mimic.mutators.base import StructuredMutator
 
 _DATE_RE = re.compile(r"^(\d{1,2})/(\d{1,2})(?:/(\d{4}))?$")
 
 
-class DateMutator(Mutator):
+class DateMutator(StructuredMutator):
     """Expands a ``DD/MM`` or ``DD/MM/AAAA`` date into digit forms people
     actually type into passwords.
 
@@ -32,7 +33,8 @@ class DateMutator(Mutator):
     dropped, preserving first-seen order.
     """
 
-    def mutate(self, word: str) -> Iterator[str]:
+    def mutate_candidate(self, candidate: Candidate) -> Iterator[Candidate]:
+        word = candidate.value
         match = _DATE_RE.match(word.strip())
         if not match:
             raise ValueError(
@@ -47,16 +49,21 @@ class DateMutator(Mutator):
         d, m = str(day), str(month)
 
         tokens = [
-            dd + mm,  # day, then month
-            mm + dd,  # month, then day (day/month inverted)
-            d + mm,
-            m + dd,
+            (dd + mm, "ddmm"),
+            (mm + dd, "mmdd"),
+            (d + mm, "dmm"),
+            (m + dd, "mdd"),
         ]
         if year_s is not None:
-            tokens.extend([year_s, year_s[-2:], dd + mm + year_s])
+            tokens.extend([
+                (year_s, "yyyy"), (year_s[-2:], "yy"),
+                (dd + mm + year_s, "ddmmyyyy"),
+            ])
 
         seen: set[str] = set()
-        for token in tokens:
+        for token, format_name in tokens:
             if token not in seen:
                 seen.add(token)
-                yield token
+                yield candidate.derive(token, Transformation("date", (
+                    ("input", word), ("format", format_name),
+                )))
