@@ -7,15 +7,22 @@ import json
 import logging
 import sys
 from collections.abc import Iterator
-from itertools import chain
 from pathlib import Path
 
+from mimic.application import (
+    ApplicationError,
+    GenerationLimits,
+    GenerationRequest,
+    GenerationService,
+    MutationOptions,
+    PolicyOptions,
+    SourceOptions,
+)
 from mimic.core.candidate import Candidate, Origin
 from mimic.core.sink import Sink
-from mimic.domain.context import load_context
-from mimic.domain.datasets import DEFAULT_MAX_LINES, stream_dataset, stream_ptbr
-from mimic.domain.models import Generation, GenerationOptions
-from mimic.domain.planning import prepare_generation
+from mimic.domain.context import ExtractedFact, load_context
+from mimic.domain.datasets import DEFAULT_MAX_LINES
+from mimic.domain.models import Target
 from mimic import __version__
 from mimic.profile.loader import build_plan, load_profile_file
 from mimic.profile.schema import TargetProfile
@@ -240,14 +247,11 @@ def main(argv: list[str] | None = None) -> int:
             logger.error("%s", exc)
             return 1
 
-    # --- Load profile (optional; merges into names/numbers, plus isolated
-    # seeds that must never be cross-combined by --combine) ---
-    isolated_seeds: list[str] = []
-    isolated_candidates: list[Candidate] = []
+    # Parse profile input here; its engine mapping belongs to the shared plan.
+    profile = None
     if args.profile:
         try:
             profile = load_profile_file(args.profile)
-            plan = build_plan(profile)
         except FileNotFoundError as exc:
             logger.error("Profile file not found: %s", exc)
             return 1
@@ -257,41 +261,39 @@ def main(argv: list[str] | None = None) -> int:
         except OSError as exc:
             logger.error("I/O error reading profile: %s", exc)
             return 2
-        names.extend(plan.base_words)
-        numbers.extend(plan.numbers)
-        isolated_seeds.extend(plan.isolated_seeds)
-        base_candidates.extend(plan.base_candidates)
-        number_candidates.extend(plan.number_candidates)
-        isolated_candidates.extend(plan.isolated_candidates)
 
     inline = {"data_nascimento": args.birth_date, "time_futebol": args.team,
               "pet": args.pet, "empresa": args.company}
     try:
-        inline_plan = build_plan(TargetProfile.from_dict(inline))
-        isolated_candidates.extend(inline_plan.isolated_candidates)
-        number_candidates.extend(inline_plan.number_candidates)
-        numbers.extend(inline_plan.numbers)
-        facts = load_context(args.context) if args.context else []
+        inline_profile = TargetProfile.from_dict(inline)
         if args.max_dataset_lines < 1:
             raise ValueError("max-dataset-lines must be >= 1")
-    except FileNotFoundError as exc:
-        logger.error("Context file not found: %s", exc)
-        return 1
     except (ValueError, TypeError) as exc:
         logger.error("Invalid context: %s", exc)
         return 1
-    except OSError as exc:
-        logger.error("I/O error reading context: %s", exc)
-        return 2
 
-    if not args.export_rules and not (names or isolated_seeds or isolated_candidates
-                                     or facts or args.dataset or args.candidates or args.ptbr):
+    inline_facts = tuple(
+        ExtractedFact(field, Candidate(value, (Origin("profile", field, value),)))
+        for field in ("data_nascimento", "time_futebol", "empresa", "pet")
+        if (value := getattr(inline_profile, field)) is not None
+    )
+    has_profile_seed = bool(profile and (
+        profile.nome or profile.apelidos or profile.time_futebol or profile.empresa or profile.pet
+    ))
+    has_inline_seed = bool(
+        inline_profile.time_futebol or inline_profile.empresa or inline_profile.pet
+    )
+    if not args.export_rules and not (names or has_profile_seed or has_inline_seed
+                                     or args.context or args.dataset or args.candidates or args.ptbr):
         logger.error("No names provided.")
         return 1
 
     # --- Export hashcat rules mode ---
     if args.export_rules:
         try:
+            if profile is not None:
+                numbers.extend(build_plan(profile).numbers)
+            numbers.extend(build_plan(inline_profile).numbers)
             count = export_rules(
                 numbers=numbers,
                 separators=args.separators,
@@ -303,42 +305,45 @@ def main(argv: list[str] | None = None) -> int:
         except OSError as exc:
             logger.error("I/O error writing rules: %s", exc)
             return 2
+        except ValueError as exc:
+            logger.error("Invalid profile for rule export: %s", exc)
+            return 1
 
-    try:
-        options = GenerationOptions(
+    request = GenerationRequest(
+        target=Target(profile.nome or "", profile) if profile is not None else None,
+        base_candidates=tuple(base_candidates),
+        number_candidates=tuple(number_candidates),
+        context_facts=inline_facts,
+        context_path=args.context,
+        sources=SourceOptions(
+            dataset_paths=tuple(args.dataset),
+            ready_candidate_paths=tuple(args.candidates),
+            include_ptbr=args.ptbr,
+        ),
+        mutations=MutationOptions(
             leet_mode=args.leet, combine=args.combine, separators=args.separators,
+        ),
+        policy=PolicyOptions(
+            min_len=args.min_len, max_len=args.max_len,
+            require_upper=args.require_upper, require_lower=args.require_lower,
+            require_digit=args.require_digit, require_special=args.require_special,
+        ),
+        limits=GenerationLimits(
             max_candidates_per_word=args.max_per_word,
-            min_len=args.min_len,
-            max_len=args.max_len,
-            require_upper=args.require_upper,
-            require_lower=args.require_lower,
-            require_digit=args.require_digit,
-            require_special=args.require_special,
-        )
-
-        extra = chain(
-            *(stream_dataset(path, ready=True, max_lines=args.max_dataset_lines)
-              for path in args.candidates),
-            *(stream_dataset(path, max_lines=args.max_dataset_lines) for path in args.dataset),
-            stream_ptbr() if args.ptbr else (),
-        )
-        generator = prepare_generation(
-            Generation(options=options, output_path=args.output),
-            base_candidates=base_candidates, isolated_candidates=isolated_candidates,
-            number_candidates=number_candidates, context_facts=facts,
-            extra_seeds=extra,
-        ).generator
-    except (ValueError, TypeError) as exc:
+            max_dataset_lines=args.max_dataset_lines,
+        ),
+    )
+    try:
+        prepared = GenerationService().prepare(request)
+    except ApplicationError as exc:
         logger.error("Invalid generation configuration: %s", exc)
         return 1
     sink = Sink(output_path=args.output)
 
-    candidates = generator.generate()
-    if args.debug:
-        candidates = _trace(generator.generate_candidates())
+    values = _trace(prepared.iter_candidates()) if args.debug else prepared.iter_values()
 
     try:
-        count = sink.drain(candidates)
+        count = sink.drain(values)
         logger.info("Generated %d candidates.", count)
     except (OSError, UnicodeError) as exc:
         logger.error("I/O error during output: %s", exc)
