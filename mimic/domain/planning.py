@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
+from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
 
@@ -32,6 +33,8 @@ class BehaviorPattern(str, Enum):
 class PreparedGeneration:
     generator: Generator
     patterns: tuple[BehaviorPattern, ...]
+    target_seed_count: int
+    organization_seed_count: int
 
 
 def _organization_seeds(organization: Organization) -> Iterator[Seed]:
@@ -43,6 +46,15 @@ def _organization_seeds(organization: Organization) -> Iterator[Seed]:
         for value in values:
             if value.strip():
                 yield Seed(Candidate(value, (Origin("organization", field, value),)))
+    for date in organization.relevant_dates:
+        date_candidate = Candidate(date, (Origin("organization", "relevant_date", date),))
+        for token in DateMutator().mutate_candidate(date_candidate):
+            yield Seed(token)
+
+
+def organization_seed_count(organization: Organization) -> int:
+    """Count in-memory organization engine seeds without touching corpora."""
+    return sum(1 for _ in _organization_seeds(organization))
 
 
 def prepare_generation(
@@ -71,6 +83,7 @@ def prepare_generation(
             base.append(Candidate(generation.target.name, (
                 Origin("target", "name", generation.target.name),
             )))
+    target_seed_count = len(base) + len(isolated) + len(numbers)
     context_isolated: list[Candidate] = []
     for fact in context_facts:
         if fact.field == "data_nascimento":
@@ -84,14 +97,14 @@ def prepare_generation(
     organization = generation.organization or (
         generation.target.organization if generation.target else None
     )
+    # Organization is mutable. Freeze its in-memory facts for this plan so a
+    # later edit cannot make execution disagree with the prepared summary.
+    organization = deepcopy(organization) if organization is not None else None
+    organization_count = organization_seed_count(organization) if organization else 0
 
     def source_seeds() -> Iterator[Seed]:
         if organization is not None:
             yield from _organization_seeds(organization)
-            for date in organization.relevant_dates:
-                date_candidate = Candidate(date, (Origin("organization", "relevant_date", date),))
-                for token in DateMutator().mutate_candidate(date_candidate):
-                    yield Seed(token)
         for seed in extra_seeds:
             if not isinstance(seed, Seed):
                 raise TypeError("extra_seeds must contain Seed objects")
@@ -122,4 +135,4 @@ def prepare_generation(
          BehaviorPattern.TARGET_DATE_SPECIAL, BehaviorPattern.TARGET_SPECIAL_DATE)
         if numbers and base else ()
     )
-    return PreparedGeneration(generator, patterns)
+    return PreparedGeneration(generator, patterns, target_seed_count, organization_count)
