@@ -19,6 +19,7 @@ include = ["mimic*"]
 
 [tool.setuptools.package-data]
 "mimic.data.ptbr" = ["*.txt"]
+"mimic.web" = ["templates/*.html", "static/*.css", "static/*.js", "static/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -27,4 +28,4 @@ testpaths = ["tests"]
 dev = ["pytest>=7.0"]
 ui = ["pyfiglet>=1.0", "rich>=13.0"]
 profile = ["pyyaml>=6.0"]
-web = ["fastapi>=0.115.8", "uvicorn>=0.30.0", "httpx>=0.28.1"]
+web = ["fastapi>=0.115.8", "uvicorn>=0.30.0", "httpx>=0.28.1", "Jinja2>=3.1.6", "python-multipart>=0.0.20"]
