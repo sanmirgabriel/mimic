@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false}'>
+  <title>{{ title|default('Workspace') }} · MIMIC</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+  <script src="{{ url_for('static', path='htmx.min.js') }}" defer></script>
+  <script src="{{ url_for('static', path='app.js') }}" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <aside class="sidebar" aria-label="Workspace navigation">
+    <a class="brand" href="/" aria-label="MIMIC dashboard">
+      <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M4 25V7L16 18 28 7v18M10 25V17l6 6 6-6v8" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/></svg>
+      <span>MIMIC<small>LOCAL WORKSPACE</small></span>
+    </a>
+    <nav>
+      {% for key, label, path, symbol in [('dashboard','Dashboard','/','◈'), ('engagements','Engagements','/engagements','▣'), ('organizations','Organizations','/organizations','◇'), ('targets','Targets','/targets','◎'), ('generate','Generate','/generate','↗'), ('jobs','Jobs','/jobs','≡')] %}
+      <a href="{{ path }}" class="nav-link{% if nav == key %} active{% endif %}" {% if nav == key %}aria-current="page"{% endif %}><span aria-hidden="true">{{ symbol }}</span>{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <div class="sidebar-foot"><span class="local-dot"></span> Local only <small>v{{ version }}</small><a href="/docs">API documentation ↗</a></div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><span class="crumb">Workspace <span>/</span> {{ title|default('MIMIC') }}</span><a class="button primary compact" href="/generate"><span aria-hidden="true">+</span> New generation</a></header>
+    <main id="main" tabindex="-1">{% block content %}{% endblock %}</main>
+    <footer class="page-foot">MIMIC · Target-aware generation <span>Causal provenance, from seed to candidate.</span></footer>
+  </div>
+</body>
+</html>

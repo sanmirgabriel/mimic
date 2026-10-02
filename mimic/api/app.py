@@ -19,6 +19,7 @@ from mimic.application import ApplicationError, GenerationRequest
 from mimic.jobs import JobManager
 from mimic.persistence import DataPaths, Database, Repository
 from mimic.persistence.repository import StorageConflict
+from mimic.persistence.records import RecordService
 
 
 def _payload(model) -> dict:
@@ -41,18 +42,6 @@ def _required(record: dict | None) -> dict:
     return record
 
 
-def _deleted(found: bool) -> dict:
-    if not found:
-        raise HTTPException(404, "resource not found")
-    return {"deleted": True}
-
-
-def _name(name: str | None) -> str:
-    if not isinstance(name, str) or not name.strip():
-        raise HTTPException(422, "name must be a non-empty string")
-    return name.strip()
-
-
 def create_app(data_dir: str | Path | None = None, database_path: str | Path | None = None,
                repository: Repository | None = None,
                manager: JobManager | None = None) -> FastAPI:
@@ -70,11 +59,13 @@ def create_app(data_dir: str | Path | None = None, database_path: str | Path | N
         raise ValueError("data_dir must match the injected manager")
     repo = repository or Repository(Database(paths, database_path))
     jobs = manager or JobManager(repo, paths)
+    records = RecordService(repo)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         jobs.start()
         try:
+            app.state.web_uploads.cleanup(repo.list_jobs())
             yield
         finally:
             jobs.stop()
@@ -82,6 +73,13 @@ def create_app(data_dir: str | Path | None = None, database_path: str | Path | N
     app = FastAPI(title="MIMIC Local API", version=__version__, lifespan=lifespan)
     app.state.repository = repo
     app.state.job_manager = jobs
+    app.state.records = records
+
+    def record_action(operation, *args):
+        try:
+            return operation(*args)
+        except (StorageConflict, ValueError, TypeError, LookupError) as exc:
+            raise _translate(exc) from exc
 
     @app.get("/api/health")
     def health():
@@ -93,7 +91,7 @@ def create_app(data_dir: str | Path | None = None, database_path: str | Path | N
 
     @app.post("/api/engagements", status_code=201)
     def create_engagement(body: EngagementInput):
-        return repo.create_engagement(_name(body.name), body.description)
+        return record_action(records.create, "engagements", _payload(body))
 
     @app.get("/api/engagements/{item_id}")
     def get_engagement(item_id: UUID):
@@ -102,19 +100,11 @@ def create_app(data_dir: str | Path | None = None, database_path: str | Path | N
 
     @app.patch("/api/engagements/{item_id}")
     def patch_engagement(item_id: UUID, body: EngagementPatch):
-        item_id = str(item_id)
-        changes = _payload(body)
-        if "name" in changes:
-            changes["name"] = _name(changes["name"])
-        return _required(repo.update_engagement(item_id, changes))
+        return record_action(records.update, "engagements", str(item_id), _payload(body))
 
     @app.delete("/api/engagements/{item_id}")
     def delete_engagement(item_id: UUID):
-        item_id = str(item_id)
-        try:
-            return _deleted(repo.delete_engagement(item_id))
-        except StorageConflict as exc:
-            raise _translate(exc) from exc
+        return record_action(records.delete, "engagements", str(item_id))
 
     @app.get("/api/organizations")
     def list_organizations():
@@ -122,12 +112,7 @@ def create_app(data_dir: str | Path | None = None, database_path: str | Path | N
 
     @app.post("/api/organizations", status_code=201)
     def create_organization(body: OrganizationInput):
-        data = _payload(body)
-        data["name"] = _name(body.name)
-        try:
-            return repo.create_organization(data)
-        except StorageConflict as exc:
-            raise _translate(exc) from exc
+        return record_action(records.create, "organizations", _payload(body))
 
     @app.get("/api/organizations/{item_id}")
     def get_organization(item_id: UUID):
@@ -136,25 +121,11 @@ def create_app(data_dir: str | Path | None = None, database_path: str | Path | N
 
     @app.patch("/api/organizations/{item_id}")
     def patch_organization(item_id: UUID, body: OrganizationPatch):
-        item_id = str(item_id)
-        changes = _payload(body)
-        if "name" in changes:
-            changes["name"] = _name(changes["name"])
-        for key in ("aliases", "locations", "keywords", "relevant_dates", "domains"):
-            if key in changes and changes[key] is None:
-                raise HTTPException(422, f"{key} must be a list")
-        try:
-            return _required(repo.update_organization(item_id, changes))
-        except StorageConflict as exc:
-            raise _translate(exc) from exc
+        return record_action(records.update, "organizations", str(item_id), _payload(body))
 
     @app.delete("/api/organizations/{item_id}")
     def delete_organization(item_id: UUID):
-        item_id = str(item_id)
-        try:
-            return _deleted(repo.delete_organization(item_id))
-        except StorageConflict as exc:
-            raise _translate(exc) from exc
+        return record_action(records.delete, "organizations", str(item_id))
 
     @app.get("/api/targets")
     def list_targets():
@@ -162,12 +133,7 @@ def create_app(data_dir: str | Path | None = None, database_path: str | Path | N
 
     @app.post("/api/targets", status_code=201)
     def create_target(body: TargetInput):
-        data = _payload(body)
-        data["name"] = _name(body.name)
-        try:
-            return repo.create_target(data)
-        except (StorageConflict, ValueError, TypeError) as exc:
-            raise _translate(exc) from exc
+        return record_action(records.create, "targets", _payload(body))
 
     @app.get("/api/targets/{item_id}")
     def get_target(item_id: UUID):
@@ -176,24 +142,11 @@ def create_app(data_dir: str | Path | None = None, database_path: str | Path | N
 
     @app.patch("/api/targets/{item_id}")
     def patch_target(item_id: UUID, body: TargetPatch):
-        item_id = str(item_id)
-        changes = _payload(body)
-        if "name" in changes:
-            changes["name"] = _name(changes["name"])
-        if "profile" in changes and changes["profile"] is None:
-            raise HTTPException(422, "profile must be an object")
-        try:
-            return _required(repo.update_target(item_id, changes))
-        except (StorageConflict, ValueError, TypeError) as exc:
-            raise _translate(exc) from exc
+        return record_action(records.update, "targets", str(item_id), _payload(body))
 
     @app.delete("/api/targets/{item_id}")
     def delete_target(item_id: UUID):
-        item_id = str(item_id)
-        try:
-            return _deleted(repo.delete_target(item_id))
-        except StorageConflict as exc:
-            raise _translate(exc) from exc
+        return record_action(records.delete, "targets", str(item_id))
 
     @app.get("/api/jobs")
     def list_jobs():
@@ -240,4 +193,7 @@ def create_app(data_dir: str | Path | None = None, database_path: str | Path | N
         return FileResponse(output, media_type="text/plain; charset=utf-8",
                             filename=f"mimic-{job_id}.txt")
 
+    from mimic.web.routes import mount_web
+
+    mount_web(app)
     return app
