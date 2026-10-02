@@ -168,6 +168,24 @@ def main(argv: list[str] | None = None) -> int:
         Exit code: 0 success, 1 input error, 2 I/O error.
     """
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "serve":
+        serve_parser = argparse.ArgumentParser(prog="mimic serve")
+        serve_parser.add_argument("--host", default="127.0.0.1")
+        serve_parser.add_argument("--port", type=int, default=8787)
+        serve_parser.add_argument("--data-dir")
+        serve_args = serve_parser.parse_args(argv[1:])
+        if serve_args.host not in ("127.0.0.1", "::1"):
+            serve_parser.error("only loopback hosts are allowed without authentication")
+        if not 1 <= serve_args.port <= 65535:
+            serve_parser.error("port must be between 1 and 65535")
+        try:
+            import uvicorn
+            from mimic.api import create_app
+        except ImportError as exc:
+            serve_parser.error("web dependencies unavailable; install mimic[web]")
+        uvicorn.run(create_app(data_dir=serve_args.data_dir),
+                    host=serve_args.host, port=serve_args.port)
+        return 0
     if argv and argv[0] == "profile":
         profile_parser = argparse.ArgumentParser(prog="mimic profile")
         profile_commands = profile_parser.add_subparsers(dest="command", required=True)
