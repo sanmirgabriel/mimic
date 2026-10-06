@@ -21,6 +21,7 @@ from mimic.application import (
     MutationOptions,
     PolicyOptions,
     SourceOptions,
+    IntelligenceOptions,
 )
 from mimic.cli import main
 import mimic.cli as cli_module
@@ -497,6 +498,7 @@ def test_cli_and_direct_request_agree(tmp_path):
         "generate", "--profile", str(profile), "--dataset", str(dataset),
         "--candidates", str(ready), "--ptbr", "--leet", "partial",
         "--min-len", "6", "-o", str(out), "--quiet", "--no-banner",
+        "--reference-year", "2026",
     ]) == 0
     cli_values = out.read_text(encoding="utf-8").splitlines()
 
@@ -508,6 +510,7 @@ def test_cli_and_direct_request_agree(tmp_path):
                               ready_candidate_paths=(str(ready),), include_ptbr=True),
         mutations=MutationOptions(leet_mode="partial"),
         policy=PolicyOptions(min_len=6),
+        intelligence=IntelligenceOptions(reference_year=2026),
     )
     prepared = GenerationService().prepare(request)
     direct = list(prepared.iter_candidates())

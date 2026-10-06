@@ -18,6 +18,7 @@ from mimic.application.requests import (
     MutationOptions,
     PolicyOptions,
     SourceOptions,
+    IntelligenceOptions,
 )
 
 __all__ = [
@@ -31,4 +32,5 @@ __all__ = [
     "PolicyOptions",
     "GenerationLimits",
     "SourceOptions",
+    "IntelligenceOptions",
 ]

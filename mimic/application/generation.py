@@ -16,18 +16,21 @@ dataset files, generate candidates or start work. Execution happens only when
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import chain
+import re
 
 from mimic.application.errors import ApplicationError, InvalidGenerationRequest
 from mimic.application.requests import GenerationLimits, GenerationRequest, PolicyOptions
-from mimic.core.candidate import Candidate
+from mimic.core.candidate import Candidate, Origin, Transformation
 from mimic.core.seed import Seed
 from mimic.domain.context import ExtractedFact, load_context
 from mimic.domain.datasets import stream_dataset, stream_ptbr
 from mimic.domain.models import Generation, GenerationOptions
 from mimic.domain.planning import BehaviorPattern, PreparedGeneration as PlannedGeneration
 from mimic.domain.planning import prepare_generation
+from mimic.intelligence.builtins import KNOWLEDGE_VERSION
+from mimic.intelligence.planning import IntelligencePlan, plan_intelligence
 
 
 @dataclass(frozen=True)
@@ -56,6 +59,17 @@ class GenerationPlanSummary:
     leet_mode: str
     policy: PolicyOptions
     limits: GenerationLimits
+    intelligence_enabled: bool
+    common_numbers_enabled: bool
+    corporate_roles_enabled: bool
+    reference_year: int | None
+    recent_years: tuple[int, ...]
+    service_profiles: tuple[str, ...]
+    knowledge_seed_count: int
+    knowledge_number_count: int
+    knowledge_version: str
+    knowledge_template_seed_count: int
+    service_derived_seed_count: int
 
     def to_dict(self) -> dict:
         from dataclasses import asdict
@@ -125,13 +139,26 @@ class GenerationService:
             raise InvalidGenerationRequest("request must be a GenerationRequest")
         request.validate()
         facts = self._resolve_context(request)
+        terms = self._organization_terms(request, facts)
+        has_context = self._has_context(request, facts)
+        intelligence = request.intelligence
+        if intelligence.enabled and not (has_context or intelligence.service_profiles
+                or request.sources.dataset_paths or request.sources.ready_candidate_paths or request.sources.include_ptbr):
+            raise InvalidGenerationRequest("intelligence requires a contextual seed or service profile")
+        # Service-only requests use only the selected profiles' vocabulary.
+        # Configured corpora without context receive numeric primitives only.
+        if not has_context:
+            intelligence = replace(intelligence, corporate_roles=False)
+        supplemental = tuple(term for term in terms if any(
+            step.kind == "organization_domain_label" for step in term.transformations))
+        knowledge = plan_intelligence(intelligence, terms, supplemental)
         options = self._build_options(request)
         generation = Generation(
             target=request.target,
             organization=request.organization,
             options=options,
         )
-        extra = self._extra_seeds(request)
+        extra = self._extra_seeds(request, knowledge)
         try:
             planned = prepare_generation(
                 generation,
@@ -140,14 +167,30 @@ class GenerationService:
                 number_candidates=request.number_candidates,
                 context_facts=facts,
                 extra_seeds=extra,
+                extra_number_candidates=knowledge.numbers,
+                defer_extra_numbers=bool(request.sources.ready_candidate_paths and knowledge.numbers),
             )
-            summary = self._summary(request, facts, planned)
+            summary = self._summary(request, facts, planned, knowledge)
         except (ValueError, TypeError) as exc:
             raise InvalidGenerationRequest(str(exc)) from exc
         warnings = self._warnings(request, facts)
+        if request.intelligence.enabled and not (planned.target_seed_count or planned.organization_seed_count or facts):
+            warnings += ("intelligence enabled without target/organization context",)
         return PreparedGeneration(request, planned, warnings, summary)
 
     # -- resolution helpers -------------------------------------------------
+
+    def _has_context(self, request: GenerationRequest, facts: list[ExtractedFact]) -> bool:
+        if any(candidate.value.strip() for candidate in (*request.base_candidates, *request.isolated_candidates)) or any(
+                fact.candidate.value.strip() for fact in facts):
+            return True
+        target = request.target
+        if target and (target.name.strip() or any((target.profile.nome, target.profile.apelidos,
+                target.profile.empresa, target.profile.pet, target.profile.time_futebol, target.profile.data_nascimento))):
+            return True
+        org = request.organization or (target.organization if target else None)
+        return bool(org and any(value.strip() for value in (
+            org.name, *org.aliases, *org.locations, *org.keywords, *org.relevant_dates, *org.domains)))
 
     def _resolve_context(self, request: GenerationRequest) -> list[ExtractedFact]:
         facts = list(request.context_facts)
@@ -173,11 +216,39 @@ class GenerationService:
             require_special=p.require_special,
         )
 
-    def _extra_seeds(self, request: GenerationRequest) -> Iterator[Seed]:
+    def _organization_terms(self, request: GenerationRequest, facts: list[ExtractedFact]) -> tuple[Candidate, ...]:
+        """Adapt explicit company facts; DNS hostnames contribute only their first label.
+
+        No public suffix guessing, URL parsing, subdomain search or NLP. Raw
+        organization domains remain explicit inputs in domain planning.
+        """
+        terms: list[Candidate] = []
+        if request.target and request.target.profile.empresa:
+            value = request.target.profile.empresa
+            terms.append(Candidate(value, (Origin("profile", "empresa", value),)))
+        terms.extend(fact.candidate for fact in facts if fact.field == "empresa")
+        org = request.organization or (request.target.organization if request.target else None)
+        if org:
+            for field, values in (("name", (org.name,)), ("alias", org.aliases)):
+                terms.extend(Candidate(value, (Origin("organization", field, value),))
+                             for value in values if value.strip())
+            for value in org.domains:
+                hostname = value.lower().removesuffix(".")
+                label = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+                if re.fullmatch(label + r"(?:\." + label + r")+", hostname):
+                    candidate = Candidate(value, (Origin("organization", "domain", value),))
+                    terms.append(candidate.derive(hostname.split(".")[0], Transformation(
+                        "organization_domain_label", (("input", value), ("rule", "first_dns_label")))))
+        first: dict[str, Candidate] = {}
+        for term in terms:
+            first.setdefault(term.value, term)
+        return tuple(first.values())
+
+    def _extra_seeds(self, request: GenerationRequest, knowledge: IntelligencePlan) -> Iterator[Seed]:
         """Build the lazy source chain in causal-precedence order.
 
-        Ready candidates precede external datasets, which precede PT-BR
-        built-ins. Every element is a generator: no file is opened here.
+        Ready candidates precede knowledge, external datasets and PT-BR.
+        Corpora remain generators: no file is opened here.
         """
         limit = request.limits.max_dataset_lines
         return chain(
@@ -185,6 +256,7 @@ class GenerationService:
                 stream_dataset(path, ready=True, max_lines=limit)
                 for path in request.sources.ready_candidate_paths
             ),
+            knowledge.seeds,
             *(
                 stream_dataset(path, max_lines=limit)
                 for path in request.sources.dataset_paths
@@ -196,7 +268,7 @@ class GenerationService:
 
     def _summary(
         self, request: GenerationRequest, facts: list[ExtractedFact],
-        planned: PlannedGeneration,
+        planned: PlannedGeneration, knowledge: IntelligencePlan,
     ) -> GenerationPlanSummary:
         mutators = ["case"]
         if request.mutations.leet_mode != "none":
@@ -217,6 +289,19 @@ class GenerationService:
             leet_mode=request.mutations.leet_mode,
             policy=request.policy,
             limits=request.limits,
+            intelligence_enabled=request.intelligence.enabled,
+            common_numbers_enabled=request.intelligence.enabled and request.intelligence.common_numbers,
+            corporate_roles_enabled=knowledge.corporate_roles_active,
+            reference_year=request.intelligence.reference_year,
+            recent_years=knowledge.years,
+            service_profiles=knowledge.services,
+            knowledge_seed_count=len(knowledge.seeds),
+            knowledge_number_count=len(knowledge.numbers),
+            knowledge_version=KNOWLEDGE_VERSION,
+            knowledge_template_seed_count=sum(any(step.kind == "knowledge_template" for step in seed.candidate.transformations)
+                                            for seed in knowledge.seeds),
+            service_derived_seed_count=sum(any(origin.source == "knowledge" and origin.field.startswith("service.")
+                                          for origin in seed.candidate.origins) for seed in knowledge.seeds),
         )
 
     def _warnings(
