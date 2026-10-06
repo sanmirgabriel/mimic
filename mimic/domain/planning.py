@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
+from itertools import chain
 
 from mimic.core.candidate import Candidate, Origin
 from mimic.core.generator import Generator
 from mimic.core.policy import PasswordPolicy
 from mimic.core.seed import Seed
+from mimic.core.seeds import unique_seeds
 from mimic.domain.context import ExtractedFact
 from mimic.domain.models import Generation, Organization, SourceType
 from mimic.mutators.affix import AffixMutator
@@ -64,6 +66,8 @@ def prepare_generation(
     number_candidates: Iterable[Candidate] = (),
     context_facts: Iterable[ExtractedFact] = (),
     extra_seeds: Iterable[Seed] = (),
+    extra_number_candidates: Iterable[Candidate] = (),
+    defer_extra_numbers: bool = False,
 ) -> PreparedGeneration:
     """Create the same engine request for CLI and future interfaces.
 
@@ -93,6 +97,10 @@ def prepare_generation(
         else:
             context_isolated.append(fact.candidate)
     isolated.extend(context_isolated)
+    has_context_numbers = bool(numbers)
+    explicit_numbers = list(numbers)
+    # Supplementary numeric operands follow explicit target/context tokens.
+    numbers.extend(extra_number_candidates)
 
     organization = generation.organization or (
         generation.target.organization if generation.target else None
@@ -101,10 +109,22 @@ def prepare_generation(
     # later edit cannot make execution disagree with the prepared summary.
     organization = deepcopy(organization) if organization is not None else None
     organization_count = organization_seed_count(organization) if organization else 0
+    organization_seeds = tuple(_organization_seeds(organization)) if organization else ()
+    full_stages = (CaseMutator(), LeetMutator(options.leet_mode),
+                   AffixMutator(numbers=numbers, separators=options.separators))
+    explicit_stages = (CaseMutator(), LeetMutator(options.leet_mode),
+                       AffixMutator(numbers=explicit_numbers, separators=options.separators))
+
+    def deferred_context() -> Iterator[Seed]:
+        # Replay original operands through the same engine with supplementary
+        # tokens, after immutable sources. These are never Combine partners.
+        operands = chain(generator._seeds(), (seed.candidate for seed in organization_seeds))
+        for candidate in unique_seeds(operands):
+            yield Seed(candidate, stages=full_stages)
 
     def source_seeds() -> Iterator[Seed]:
-        if organization is not None:
-            yield from _organization_seeds(organization)
+        yield from organization_seeds
+        pending = defer_extra_numbers
         for seed in extra_seeds:
             if not isinstance(seed, Seed):
                 raise TypeError("extra_seeds must contain Seed objects")
@@ -113,7 +133,15 @@ def prepare_generation(
                 for origin in seed.candidate.origins
             ):
                 raise ValueError("Dataset and ready candidates cannot be combinable")
+            if defer_extra_numbers and seed.mutable:
+                if pending:
+                    yield from deferred_context()
+                    pending = False
+                if seed.stages is None:
+                    seed = replace(seed, stages=full_stages)
             yield seed
+        if pending:
+            yield from deferred_context()
 
     policy = PasswordPolicy(
         min_len=options.min_len, max_len=options.max_len,
@@ -123,8 +151,7 @@ def prepare_generation(
     generator = Generator(
         base_words=base,
         isolated_seeds=isolated,
-        stages=[CaseMutator(), LeetMutator(options.leet_mode),
-                AffixMutator(numbers=numbers, separators=options.separators)],
+        stages=list(explicit_stages if defer_extra_numbers else full_stages),
         combine=CombineMutator(base, options.separators) if options.combine else None,
         reverse=ReverseMutator(), policy=policy,
         max_candidates_per_word=options.max_candidates_per_word,
@@ -133,6 +160,6 @@ def prepare_generation(
     patterns = (
         (BehaviorPattern.TARGET_DATE, BehaviorPattern.TARGET_YEAR,
          BehaviorPattern.TARGET_DATE_SPECIAL, BehaviorPattern.TARGET_SPECIAL_DATE)
-        if numbers and base else ()
+        if has_context_numbers and base else ()
     )
     return PreparedGeneration(generator, patterns, target_seed_count, organization_count)

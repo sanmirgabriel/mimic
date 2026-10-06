@@ -17,12 +17,14 @@ from mimic.application import (
     MutationOptions,
     PolicyOptions,
     SourceOptions,
+    IntelligenceOptions,
 )
 from mimic.core.candidate import Candidate, Origin
 from mimic.core.sink import Sink
 from mimic.domain.context import ExtractedFact, load_context
 from mimic.domain.datasets import DEFAULT_MAX_LINES
-from mimic.domain.models import Target
+from mimic.domain.models import Organization, Target
+from mimic.intelligence.builtins import SERVICE_PROFILES
 from mimic import __version__
 from mimic.profile.loader import build_plan, load_profile_file
 from mimic.profile.schema import TargetProfile
@@ -47,6 +49,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("-t", "--team", help="Target's football team.")
     p.add_argument("-p", "--pet", help="Target's pet name.")
     p.add_argument("-c", "--company", help="Target's company.")
+    p.add_argument("--organization", help="Organization name; no saved record or target required.")
+    p.add_argument("--service", action="append", default=[], choices=[profile.id for profile in SERVICE_PROFILES],
+                   help="Contextual service profile (repeatable).")
+    p.add_argument("--intelligence", action=argparse.BooleanOptionalAction, default=None,
+                   help="Password Intelligence (default on for generate; off for legacy invocation).")
+    p.add_argument("--reference-year", type=int, help="Freeze recent-year knowledge at this year.")
     p.add_argument("--context", help="Deterministic field:value context file.")
     p.add_argument("--dataset", action="append", default=[], help="Local seed corpus (repeatable).")
     p.add_argument("--candidates", action="append", default=[], help="Ready candidates file (repeatable).")
@@ -193,7 +201,8 @@ def main(argv: list[str] | None = None) -> int:
         inspect_parser.add_argument("path")
         profile_args = profile_parser.parse_args(argv[1:])
         return _inspect_profile(profile_args.path)
-    if argv and argv[0] == "generate":
+    modern = bool(argv and argv[0] == "generate")
+    if modern:
         argv = argv[1:]
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -219,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
             names = _read_lines(args.names)
         elif not (args.profile or args.export_rules or args.name or args.context
                   or args.dataset or args.candidates or args.ptbr or args.birth_date
-                  or args.team or args.pet or args.company):
+                  or args.team or args.pet or args.company or args.organization or args.service):
             names = [
                 line.strip()
                 for line in sys.stdin
@@ -302,7 +311,8 @@ def main(argv: list[str] | None = None) -> int:
         inline_profile.time_futebol or inline_profile.empresa or inline_profile.pet
     )
     if not args.export_rules and not (names or has_profile_seed or has_inline_seed
-                                     or args.context or args.dataset or args.candidates or args.ptbr):
+                                     or args.context or args.dataset or args.candidates or args.ptbr
+                                     or args.organization or args.service):
         logger.error("No names provided.")
         return 1
 
@@ -329,6 +339,11 @@ def main(argv: list[str] | None = None) -> int:
 
     request = GenerationRequest(
         target=Target(profile.nome or "", profile) if profile is not None else None,
+        organization=Organization(args.organization) if args.organization else None,
+        intelligence=IntelligenceOptions(
+            enabled=modern if args.intelligence is None else args.intelligence,
+            service_profiles=tuple(args.service), reference_year=args.reference_year,
+        ),
         base_candidates=tuple(base_candidates),
         number_candidates=tuple(number_candidates),
         context_facts=inline_facts,

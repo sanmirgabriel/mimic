@@ -105,7 +105,7 @@ class Generator:
             for word in unique_seeds(self.base_words):
                 yield from self.combine.mutate_candidate(word)
 
-    def _compose(self, seed: Candidate) -> list[Candidate]:
+    def _compose(self, seed: Candidate, stages: Iterable[Mutator] | None = None) -> list[Candidate]:
         """Run *seed* through ``stages`` in sequence, capping the frontier each step.
 
         When a stage's cap is hit before every candidate in the incoming
@@ -118,7 +118,7 @@ class Generator:
         the cap).
         """
         frontier: list[Candidate] = [seed]
-        for stage in self.stages:
+        for stage in self.stages if stages is None else stages:
             next_frontier: list[Candidate] = []
             stage_seen: set[str] = set()
             candidates_processed = 0
@@ -170,12 +170,12 @@ class Generator:
             if not spec.mutable:
                 yield spec.candidate
                 continue
-            yield from self._compose(spec.candidate)
+            yield from self._compose(spec.candidate, spec.stages)
             if self.reverse is not None:
                 yield from self.reverse.mutate_candidate(spec.candidate)
             if spec.combinable and self.combine is not None:
                 for combined in self.combine.mutate_candidate(spec.candidate):
-                    yield from self._compose(combined)
+                    yield from self._compose(combined, spec.stages)
                     if self.reverse is not None:
                         yield from self.reverse.mutate_candidate(combined)
 

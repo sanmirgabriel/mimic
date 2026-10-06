@@ -16,13 +16,16 @@ them and the application never invents a ``"cli"`` origin of its own.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
+from datetime import date
 
 from mimic.application.errors import InvalidGenerationRequest
 from mimic.core.candidate import Candidate, Origin, Transformation
 from mimic.domain.context import ExtractedFact
 from mimic.domain.models import Organization, Target
 from mimic.profile.schema import TargetProfile
+from mimic.intelligence import IntelligenceOptions
+from mimic.intelligence.builtins import get_service_profile
 
 LEET_MODES = ("none", "partial", "full")
 
@@ -179,6 +182,7 @@ class GenerationRequest:
         mutations: Mutation pipeline configuration.
         policy: Password policy configuration.
         limits: Generation cost bounds.
+        intelligence: Bounded knowledge inputs; enabled requests capture a reference year.
     """
 
     target: Target | None = None
@@ -192,12 +196,16 @@ class GenerationRequest:
     mutations: MutationOptions = field(default_factory=MutationOptions)
     policy: PolicyOptions = field(default_factory=PolicyOptions)
     limits: GenerationLimits = field(default_factory=GenerationLimits)
+    intelligence: IntelligenceOptions = field(default_factory=lambda: IntelligenceOptions(enabled=False))
 
     def __post_init__(self) -> None:
         self.base_candidates = tuple(self.base_candidates)
         self.isolated_candidates = tuple(self.isolated_candidates)
         self.number_candidates = tuple(self.number_candidates)
         self.context_facts = tuple(self.context_facts)
+        if (isinstance(self.intelligence, IntelligenceOptions)
+                and self.intelligence.enabled and self.intelligence.reference_year is None):
+            self.intelligence = replace(self.intelligence, reference_year=date.today().year)
 
     def validate(self) -> None:
         """Raise :class:`InvalidGenerationRequest` on malformed configuration."""
@@ -210,9 +218,23 @@ class GenerationRequest:
             ("mutations", self.mutations, MutationOptions),
             ("policy", self.policy, PolicyOptions),
             ("limits", self.limits, GenerationLimits),
+            ("intelligence", self.intelligence, IntelligenceOptions),
         ):
             if not isinstance(value, expected):
                 raise InvalidGenerationRequest(f"{name} must be a {expected.__name__}")
+        for name in ("enabled", "common_numbers", "recent_years", "corporate_roles"):
+            if type(getattr(self.intelligence, name)) is not bool:
+                raise InvalidGenerationRequest(f"intelligence.{name} must be a boolean")
+        year = self.intelligence.reference_year
+        if year is not None and (type(year) is not int or not 4 <= year <= 9999):
+            raise InvalidGenerationRequest("reference_year must be an integer between 4 and 9999")
+        if self.intelligence.enabled and year is None:
+            raise InvalidGenerationRequest("enabled intelligence requires reference_year")
+        for service_id in self.intelligence.service_profiles:
+            try:
+                get_service_profile(service_id)
+            except ValueError as exc:
+                raise InvalidGenerationRequest(str(exc)) from exc
         for name, group in (
             ("base_candidates", self.base_candidates),
             ("isolated_candidates", self.isolated_candidates),
@@ -275,6 +297,7 @@ class GenerationRequest:
             "mutations": asdict(self.mutations),
             "policy": asdict(self.policy),
             "limits": asdict(self.limits),
+            "intelligence": self.intelligence.to_dict(),
         }
 
     @classmethod
@@ -306,6 +329,7 @@ class GenerationRequest:
                 mutations=MutationOptions.from_dict(data.get("mutations", {})),
                 policy=PolicyOptions.from_dict(data.get("policy", {})),
                 limits=GenerationLimits.from_dict(data.get("limits", {})),
+                intelligence=IntelligenceOptions.from_dict(data.get("intelligence", {"enabled": False})),
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise InvalidGenerationRequest(f"malformed request payload: {exc}") from exc

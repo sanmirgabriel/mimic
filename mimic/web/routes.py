@@ -22,7 +22,9 @@ from mimic import __version__
 from mimic.application import (
     ApplicationError, GenerationLimits, GenerationRequest, GenerationService,
     MutationOptions, PolicyOptions, SourceOptions,
+    IntelligenceOptions,
 )
+from mimic.intelligence.builtins import SERVICE_PROFILES
 from mimic.domain.context import KeyValueContextExtractor
 from mimic.domain.models import Organization, Target
 from mimic.profile.schema import TargetProfile
@@ -41,7 +43,8 @@ ORIGIN_FIELDS = {"nome": "Name", "name": "Name", "pet": "Pet", "empresa": "Compa
                  "apelidos": "Nickname", "data_nascimento": "Birth date", "time_futebol": "Football team",
                  "keyword": "Organization keyword", "alias": "Alias", "location": "Location",
                  "domain": "Domain", "relevant_date": "Relevant date"}
-STEPS = {"case": "Case", "leet": "Leet substitution", "date": "Date token", "affix": "Affix",
+STEPS = {"knowledge_template": "Knowledge template", "organization_domain_label": "Organization domain label",
+         "case": "Case", "leet": "Leet substitution", "date": "Date token", "affix": "Affix",
          "combine": "Combine", "reverse": "Reverse"}
 
 
@@ -102,7 +105,8 @@ def origin_label(origin: dict) -> str:
         return "Ready candidate"
     field = origin["field"].rsplit(":", 1)[-1]
     label = ORIGIN_FIELDS.get(field, field.replace("_", " ").capitalize())
-    return ("Context · " if source == "context_file" else "") + label
+    return ("Password Intelligence · " if source == "knowledge" else
+            "Context · " if source == "context_file" else "") + label
 
 
 def mount_web(app: FastAPI) -> None:
@@ -110,7 +114,8 @@ def mount_web(app: FastAPI) -> None:
     assets = Path(__file__).parent
     templates = Jinja2Templates(directory=str(assets / "templates"))
     templates.env.globals.update(version=__version__, collections=COLLECTIONS, profile_fields=PROFILE_FIELDS,
-                                 list_fields=LIST_FIELDS, origin_label=origin_label, step_labels=STEPS)
+                                 list_fields=LIST_FIELDS, origin_label=origin_label, step_labels=STEPS,
+                                 service_profiles=SERVICE_PROFILES)
     app.mount("/static", StaticFiles(directory=str(assets / "static")), name="static")
     records = app.state.records
     repo = app.state.repository
@@ -182,13 +187,17 @@ def mount_web(app: FastAPI) -> None:
     async def generation_page(request: Request, values=None, *, error=None, summary=None, warnings=(), status=200):
         defaults = {"mode": "quick", "leet_mode": "partial", "separators": "@!#_.", "min_len": "0",
                     "max_len": "0", "max_candidates_per_word": "5000", "max_dataset_lines": "100000"}
+        if values is None or "intelligence_form" not in values:
+            defaults.update({key: "on" for key in ("intelligence_enabled", "common_numbers", "recent_years", "corporate_roles")})
         return render(request, "generate.html", status=status, title="New generation", nav="generate",
                       values={**defaults, **(values or {})}, error=error, summary=summary,
                       warnings=warnings, **await choices(request))
 
     @app.get("/generate", include_in_schema=False)
-    async def generation_form(request: Request, target_id: UUID | None = None):
+    async def generation_form(request: Request, target_id: UUID | None = None, organization_id: UUID | None = None):
         values = {"mode": "saved", "target_id": str(target_id)} if target_id else {}
+        if organization_id:
+            values.update(mode="organization", organization_id=str(organization_id))
         return await generation_page(request, values)
 
     async def generation_input(request: Request, form, values: dict) -> tuple[GenerationRequest, str | None]:
@@ -220,9 +229,14 @@ def mount_web(app: FastAPI) -> None:
         elif mode == "quick":
             profile = TargetProfile.from_dict({**{field: values.get(field) or None for field in PROFILE_FIELDS},
                                                "apelidos": _lines(values.get("apelidos", ""))})
-            target = Target(values.get("nome", ""), profile)
+            target = Target(values.get("nome", ""), profile) if any(
+                getattr(profile, field) for field in (*PROFILE_FIELDS, "apelidos")) else None
+        elif mode == "organization":
+            if not organization_id:
+                raise ValueError("Choose a saved organization.")
+            target = None
         else:
-            raise ValueError("Choose Quick generation or Saved target.")
+            raise ValueError("Choose Quick generation, Saved target or Organization only.")
         organization = None
         if organization_id:
             data = await _call(records.get, "organizations", organization_id)
@@ -241,7 +255,21 @@ def mount_web(app: FastAPI) -> None:
                                       int(values.get("max_dataset_lines", "100000")))
         except ValueError as exc:
             raise ValueError("Policy lengths and limits must be whole numbers.") from exc
+        try:
+            year = int(values["reference_year"]) if values.get("reference_year") else None
+        except ValueError as exc:
+            raise ValueError("Reference year must be a whole number.") from exc
+        # HTML checkbox absence means off. Older form consumers retain defaults.
+        configured = values.get("intelligence_form") == "1"
+        intelligence = IntelligenceOptions(
+            **{key: values.get(form_key) == "on" if configured else True for key, form_key in
+               (("enabled", "intelligence_enabled"), ("common_numbers", "common_numbers"),
+                ("recent_years", "recent_years"), ("corporate_roles", "corporate_roles"))},
+            service_profiles=tuple(form.getlist("service_profiles")), reference_year=year,
+        )
+        values["selected_services"] = list(intelligence.service_profiles)
         result = GenerationRequest(target=target, organization=organization, context_facts=tuple(facts),
+                                   intelligence=intelligence,
                                    context_path=source_paths.get("context"),
                                    mutations=MutationOptions(values.get("leet_mode", "partial"),
                                                              values.get("combine") == "on", values.get("separators", "@!#_.")),
@@ -250,18 +278,21 @@ def mount_web(app: FastAPI) -> None:
                                                          ready_candidate_paths=(source_paths["ready"],) if "ready" in source_paths else (),
                                                          include_ptbr=values.get("include_ptbr") == "on"))
         result.validate()
+        values["reference_year"] = str(result.intelligence.reference_year or "")
         return result, target_id
 
     @app.post("/generate", include_in_schema=False)
     async def generate(request: Request):
         form = await read_form(request)
         values = {key: value for key, value in form.items() if isinstance(value, str)}
+        values["selected_services"] = list(form.getlist("service_profiles"))
         try:
             generation, target_id = await generation_input(request, form, values)
             prepared = await run_in_threadpool(GenerationService().prepare, generation)
             summary = prepared.summary().to_dict()
             if not (summary["target_seed_count"] or summary["organization_seed_count"] or summary["context_fact_count"]
-                    or summary["ptbr_enabled"] or summary["dataset_source_count"] or summary["ready_candidate_source_count"]):
+                    or summary["ptbr_enabled"] or summary["dataset_source_count"] or summary["ready_candidate_source_count"]
+                    or (generation.intelligence.service_profiles and summary["knowledge_seed_count"])):
                 raise ValueError("Add a name, saved target, context or source file to generate candidates.")
             if values.get("intent") == "preview":
                 return await generation_page(request, values, summary=summary, warnings=prepared.warnings)
