@@ -1,33 +1,45 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ locale }}" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false}'>
-  <title>{{ title|default('Workspace') }} · MIMIC</title>
+  <title>{{ title|default(t('layout.workspace')) }} · MIMIC</title>
+  <script src="{{ url_for('static', path='theme-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
   <script src="{{ url_for('static', path='htmx.min.js') }}" defer></script>
   <script src="{{ url_for('static', path='app.js') }}" defer></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <aside class="sidebar" aria-label="Workspace navigation">
-    <a class="brand" href="/" aria-label="MIMIC dashboard">
+  <a class="skip-link" href="#main">{{ t('layout.skip') }}</a>
+  <aside class="sidebar" aria-label="{{ t('layout.navigation') }}">
+    <a class="brand" href="/" aria-label="{{ t('layout.dashboard') }}">
       <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M4 25V7L16 18 28 7v18M10 25V17l6 6 6-6v8" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/></svg>
-      <span>MIMIC<small>LOCAL WORKSPACE</small></span>
+      <span>MIMIC<small>{{ t('layout.local_workspace') }}</small></span>
     </a>
     <nav>
-      {% for key, label, path, symbol in [('dashboard','Dashboard','/','◈'), ('engagements','Engagements','/engagements','▣'), ('organizations','Organizations','/organizations','◇'), ('targets','Targets','/targets','◎'), ('generate','Generate','/generate','↗'), ('jobs','Jobs','/jobs','≡')] %}
-      <a href="{{ path }}" class="nav-link{% if nav == key %} active{% endif %}" {% if nav == key %}aria-current="page"{% endif %}><span aria-hidden="true">{{ symbol }}</span>{{ label }}</a>
+      {% for key, path, symbol in [('dashboard','/','◈'), ('engagements','/engagements','▣'), ('organizations','/organizations','◇'), ('targets','/targets','◎'), ('generate','/generate','↗'), ('jobs','/jobs','≡')] %}
+      <a href="{{ path }}" class="nav-link{% if nav == key %} active{% endif %}" {% if nav == key %}aria-current="page"{% endif %}><span aria-hidden="true">{{ symbol }}</span>{{ t('nav.' + key) }}</a>
       {% endfor %}
     </nav>
-    <div class="sidebar-foot"><span class="local-dot"></span> Local only <small>v{{ version }}</small><a href="/docs">API documentation ↗</a></div>
+    <div class="sidebar-foot"><span class="local-dot"></span> {{ t('layout.local') }} <small>v{{ version }}</small><a href="/docs">{{ t('layout.api') }}</a></div>
   </aside>
   <div class="workspace">
-    <header class="topbar"><span class="crumb">Workspace <span>/</span> {{ title|default('MIMIC') }}</span><a class="button primary compact" href="/generate"><span aria-hidden="true">+</span> New generation</a></header>
+    <header class="topbar">
+      <span class="crumb">{{ t('layout.workspace') }} <span>/</span> {{ title|default('MIMIC') }}</span>
+      <div class="topbar-actions">
+        <form class="locale-switch" method="post" action="/preferences/locale" aria-label="{{ t('locale.selector') }}" data-submit>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="return_to" value="{{ return_to }}">
+          {% for code, label in [('pt-BR','PT-BR'), ('en','EN')] %}<button type="submit" name="locale" value="{{ code }}" aria-pressed="{{ 'true' if locale == code else 'false' }}" title="{{ t('locale.' + code) }}">{{ label }}</button>{% endfor %}
+        </form>
+        <button class="theme-toggle" type="button" data-theme-toggle data-light-label="{{ t('theme.light') }}" data-dark-label="{{ t('theme.dark') }}" aria-label="{{ t('theme.light') }}" title="{{ t('theme.light') }}" aria-pressed="false" hidden><span data-theme-icon aria-hidden="true">☾</span></button>
+        <a class="button primary compact" href="/generate"><span aria-hidden="true">+</span> {{ t('generation.new') }}</a>
+      </div>
+    </header>
     <main id="main" tabindex="-1">{% block content %}{% endblock %}</main>
-    <footer class="page-foot">MIMIC · Target-aware generation <span>Causal provenance, from seed to candidate.</span></footer>
+    <footer class="page-foot">{{ t('layout.footer') }} <span>{{ t('layout.provenance') }}</span></footer>
   </div>
 </body>
 </html>

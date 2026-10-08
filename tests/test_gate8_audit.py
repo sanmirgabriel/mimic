@@ -249,7 +249,7 @@ def test_future_database_version_is_rejected_without_downgrade(tmp_path):
 
 @pytest.mark.parametrize('budget', ['banana','1.5','True','None','quick','exhaustive'])
 def test_web_custom_rejects_nonnumeric_presets(tmp_path,budget):
-    with TestClient(create_app(data_dir=tmp_path)) as client:
+    with TestClient(create_app(data_dir=tmp_path), cookies={"mimic_locale": "en"}) as client:
         response=client.post('/generate',data={'csrf_token':csrf(client),'nome':'Ana','mode':'quick',
             'intent':'preview','output_priority':'custom','custom_budget':budget})
         assert response.status_code==422
@@ -258,7 +258,7 @@ def test_web_custom_rejects_nonnumeric_presets(tmp_path,budget):
 
 def test_web_custom_submit_and_preview_laziness(tmp_path,monkeypatch):
     app=create_app(data_dir=tmp_path)
-    with TestClient(app) as client:
+    with TestClient(app, cookies={"mimic_locale": "en"}) as client:
         form={'csrf_token':csrf(client),'mode':'quick','nome':'Ana','output_priority':'custom',
               'custom_budget':'250','reference_year':'2026','intent':'preview'}
         with monkeypatch.context() as guard:
@@ -286,7 +286,7 @@ def test_web_custom_submit_and_preview_laziness(tmp_path,monkeypatch):
 
 def test_stored_explanations_escape_html_and_do_not_rescore(tmp_path,monkeypatch):
     app=create_app(data_dir=tmp_path)
-    with TestClient(app) as client:
+    with TestClient(app, cookies={"mimic_locale": "en"}) as client:
         hostile='<script>alert("x")</script>'
         options=request(); job=app.state.repository.create_job(options.to_dict(),None,None)
         repo=app.state.repository
@@ -311,7 +311,7 @@ def test_stored_explanations_escape_html_and_do_not_rescore(tmp_path,monkeypatch
 
 def test_ranked_api_and_submit_snapshot_isolation(tmp_path):
     app=create_app(data_dir=tmp_path)
-    with TestClient(app) as client:
+    with TestClient(app, cookies={"mimic_locale": "en"}) as client:
         payload=request(100).to_dict()
         response=client.post('/api/jobs',json={'request':payload})
         assert response.status_code==201
