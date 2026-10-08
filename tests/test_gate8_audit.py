@@ -94,13 +94,15 @@ def test_controlled_conceptual_order_and_real_partial_leet():
     assert score_candidate(target_year,2026).total>score_candidate(reversed_candidate,2026).total
     raw=Candidate('ace',(Origin('profile','nome','ace'),))
     mutated=list(LeetMutator('partial').mutate_candidate(raw))
-    assert [c.value for c in mutated]==['@ce','ac3','@c3']
-    assert [len(c.transformations) for c in mutated]==[1,1,2]
-    assert score_candidate(raw).total>score_candidate(mutated[0]).total>score_candidate(mutated[2]).total
-    # Historical composition has no zero-substitution frontier before Affix.
+    assert [c.value for c in mutated]==['ace','@ce','ac3','@c3']
+    assert mutated[0] is raw
+    assert [len(c.transformations) for c in mutated]==[0,1,1,2]
+    assert score_candidate(mutated[0]).total>score_candidate(mutated[1]).total>score_candidate(mutated[3]).total
+    # Zero substitutions now survives the composed frontier before Affix.
     generated=list(Generator(base_words=[raw],stages=(CaseMutator(),LeetMutator('partial'),
                    AffixMutator(numbers=['2026'],separators='')),policy=PasswordPolicy()).generate_candidates())
-    assert not any(c.value=='ace2026' for c in generated)
+    unleeted=next(c for c in generated if c.value=='ace2026')
+    assert not any(t.kind=='leet' for t in unleeted.transformations)
 
 
 @pytest.mark.parametrize('method', ['iter_candidates','iter_values'])

@@ -75,7 +75,7 @@ def test_case_records_each_applied_mode_without_mutating_input():
 
 
 @pytest.mark.parametrize("mode,expected", [
-    ("partial", ["P3drO", "Pedr0", "P3dr0"]),
+    ("partial", ["PedrO", "P3drO", "Pedr0", "P3dr0"]),
     ("full", ["P3dr0"]), ("none", ["PedrO"]),
 ])
 def test_leet_records_actual_positions_case_and_replacements(mode, expected):
@@ -319,22 +319,23 @@ def test_cli_debug_preserves_exact_stdout(tmp_path, capsys, caplog):
     assert "P3dro0905@\n" in plain
 
 
-# Captured from HEAD 6044df7 before any implementation change.
+# none/full snapshots remain from HEAD 6044df7; partial snapshots reflect
+# Block 8.4's intentional zero-substitution coverage and encounter-order change.
 @pytest.mark.parametrize("mode,cap,combine,count,digest", [
     ('none', 3, False, 10, 'd486531daf30565f323450e61c20dc3c6ca6b3a9e856607f57e46f7858ccb93d'),
     ('none', 3, True, 42, '19c81d2d46c70dd5cf2713e0b9489688feb34b221661b757e9719c0320e9497a'),
     ('none', 5000, False, 152, '2d2b3768aa855c7b28ce4ca4d059a13213a7232a11fa1bcffce8801fcae24c76'),
     ('none', 5000, True, 568, '565f1fd151b1a6723734d741c59666bcbfa3369f3334a99b3d6858d06b653cc5'),
-    ('partial', 3, False, 10, 'd867fcc3c19edb8027e69e327c2419773cb893e0dd48e0dada3dda1e4b10a1ae'),
-    ('partial', 3, True, 42, '78fbf60c153563b423fbf892449f6d2c4b362ca73d6787cc0a71c8e7542512d9'),
-    ('partial', 5000, False, 458, '2e9a857d99bc937911bcc1ac3166452941061fbbda9489f1ab9c396aa7013bd6'),
-    ('partial', 5000, True, 5532, '473c5400c76adac170fbf98ca2d2289a58172ec5124ec49a128d5032b81b7e77'),
+    ('partial', 3, False, 10, 'd486531daf30565f323450e61c20dc3c6ca6b3a9e856607f57e46f7858ccb93d'),
+    ('partial', 3, True, 42, '19c81d2d46c70dd5cf2713e0b9489688feb34b221661b757e9719c0320e9497a'),
+    ('partial', 5000, False, 608, '751987ff5c87ea5b871a9534cd08489774b51266d3670fbd44f213fb86f09241'),
+    ('partial', 5000, True, 6090, 'c35791db07fb622245906882502d5fe3ccbd4e3eedb0f315fae5aca109bdc3b4'),
     ('full', 3, False, 10, '2d3fc9025e907a64f42509b3b22ac0e70e97dee36a28bad0f069bb14532f9c3c'),
     ('full', 3, True, 42, 'a27bb54c282d166c8b1ef9a9a56064813260ed9d21edae091bcabf967f038087'),
     ('full', 5000, False, 135, '7b813eaf5f99497cc350b94b22ee489c41c1f314cf32432468a7cb73b5298db6'),
     ('full', 5000, True, 517, 'a89bd1e6883ce81ac824f6bc8b9f31de48e6b2dd1963906517faa5df69e6cd89'),
 ])
-def test_legacy_output_matches_prechange_snapshot(mode, cap, combine, count, digest):
+def test_legacy_output_matches_mode_contract_snapshot(mode, cap, combine, count, digest):
     names = ["Pedro", "Silva", "Pedro"]
     gen = Generator(
         names, [CaseMutator(), LeetMutator(mode), AffixMutator(["0905", "12"], "@_")],

@@ -205,7 +205,8 @@ def test_quick_submission_completed_provenance_download_and_no_terminal_poll(web
     detail = client.get(path)
     assert "Configuration snapshot" in detail.text and "Candidates written" in detail.text
     assert "profile.nome" in detail.text and "profile.data_nascimento" in detail.text
-    assert "Leet substitution" in detail.text and "Date token" in detail.text
+    # With cap=20, original-first partial fills Affix before leet variants.
+    assert "Leet substitution" not in detail.text and "Date token" in detail.text
     assert 'class="candidate-detail"' in detail.text
     assert f'href="/api/jobs/{job_id}/download"' in detail.text
     assert "hx-trigger" not in detail.text and "Cancel generation" not in detail.text
@@ -216,6 +217,8 @@ def test_quick_submission_completed_provenance_download_and_no_terminal_poll(web
     assert downloaded.status_code == 200 and "attachment" in downloaded.headers["content-disposition"]
     preview = client.get(f"/api/jobs/{job_id}/candidates").json()
     assert len(preview) <= 200
+    assert preview[0]["value"] == "Pedro"
+    assert not any(t["kind"] == "leet" for row in preview for t in row["transformations"])
     assert preview[0]["value"] in downloaded.text
     assert "Pedro" in client.get("/").text and "Completed" in client.get("/jobs").text
 

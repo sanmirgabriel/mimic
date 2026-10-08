@@ -62,7 +62,8 @@ def test_unicode_leet_full_and_partial_keep_original_codepoint_positions(word, f
             assert "".join(replay) == result.value
             assert result.origins == source.origins
     if word == "İa":
-        c = next(LeetMutator().mutate_candidate(source))
+        original, c = LeetMutator().mutate_candidate(source)
+        assert original is source
         assert dict(c.transformations[0].params)["position"] == "1"
 
 

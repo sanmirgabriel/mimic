@@ -234,13 +234,15 @@ def test_original_candidates_and_first_causal_derivation_survive():
     assert next(c for c in ranked if c.value == 'equal').origins == first.origins
 
 
-def test_hash_seed_determinism():
-    script = '''import json
+@pytest.mark.parametrize('leet_mode', ['none', 'partial'])
+def test_hash_seed_determinism(leet_mode):
+    separators = '!' if leet_mode == 'none' else '@!#_.'
+    script = f'''import json
 from mimic.application import *
 from mimic.domain.models import Organization
 r=GenerationRequest(organization=Organization('ACME'),
  intelligence=IntelligenceOptions(reference_year=2026,service_profiles=('wordpress',)),
- mutations=MutationOptions(leet_mode='none',separators='!'),ranking=RankingOptions(True,100))
+ mutations=MutationOptions(leet_mode={leet_mode!r},separators={separators!r}),ranking=RankingOptions(True,100))
 print(json.dumps([x.to_dict() for x in GenerationService().prepare(r).iter_results()],ensure_ascii=False))'''
     outputs = [subprocess.run([sys.executable,'-B','-c',script],check=True,capture_output=True,
         env={**os.environ,'PYTHONHASHSEED':seed,'PYTHONDONTWRITEBYTECODE':'1'}).stdout

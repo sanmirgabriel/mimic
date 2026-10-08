@@ -1,12 +1,13 @@
 # MIMIC product backlog
 
-Canonical product epics. Block 7 is merged. Block 8 is implemented in the working tree,
-under Gate 8 audit and awaiting operator review.
+Canonical product epics. Blocks 7 and 8 are merged. Block 8.4 is implemented
+and validated in the working tree. Block 8.5 remains the next product milestone.
 
 | Block | Epic | Scope |
 | --- | --- | --- |
 | 7 | Password Intelligence Foundation ✅ | Versioned primitives, contextual seeds, services, organization-only flow, causal provenance. |
-| 8 | Scoring / Ranking / Budgets | Explainable prioritization and explicit generation budgets. |
+| 8 | Scoring / Ranking / Budgets ✅ | Explainable prioritization and explicit generation budgets. |
+| 8.4 | Partial-Leet Coverage Fix ✅ | Original candidate first, then up to max_subs replacements; causal provenance, ranking, caps and compatibility validated. |
 | 8.5 | Web Internationalization (PT-BR / EN) | Immediate next product milestone: PT-BR default/selectable and English selectable; UI labels/messages only, with no duplicated business logic. |
 | 9 | Dataset & Knowledge Packs | External, streaming, license-aware packs and dataset management. |
 | 10 | Service Intelligence + Default Credential Catalog | Broader technology context; separately modeled credential pairs. |
@@ -17,17 +18,17 @@ under Gate 8 audit and awaiting operator review.
 | 15 | Documentation / Operator UX | Documentation overhaul and operator workflow improvements. |
 | 16 | Benchmarking / Release Hardening | Reproducible benchmarks, packaging and release gates. |
 
-## High-priority follow-up after Block 8
+## Block 8.4 — Partial-Leet Coverage Fix (completed)
 
-- **HIGH-PRIORITY FOLLOW-UP — preserve the zero-substitution hypothesis in partial leet.**
-  Historical `LeetMutator(mode="partial")` emits only 1..max_subs substitutions
-  for eligible words. The staged pipeline therefore omits their unmodified
-  and unmodified-plus-affix hypotheses (except independent branches or other
-  sources). Gate 8 preserves this byte-compatible behavior. In the next cycle,
-  explicitly decide whether partial should include zero substitutions; validate
-  case/affix combinations, caps, provenance and changed counts/order before
-  accepting that compatibility change. This coverage debt is independent of
-  scoring weights and must not be fixed by tuning them.
+- Partial now emits the unchanged Candidate before 1..max_subs substitutions.
+  Zero substitutions adds no leet transformation and reaches Affix and score-v1.
+- ACME + WordPress (reference year 2026, default cap 5,000): 152,263 → 159,175
+  accepted candidates; Affix truncations 28 → 29. Partial output intentionally
+  changes; none/full retain their previous output and causal metadata.
+- Direct, Generator, exhaustive/ranked, legacy/modern CLI, persistence and
+  hash-seed checks cover the new contract. See
+  [ADR 0007](adr/0007-partial-leet-coverage.md).
+- **Next milestone: Block 8.5 — Web Internationalization (PT-BR / EN).**
 
 ## Permanent constraints
 
