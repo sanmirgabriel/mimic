@@ -1,2 +1,2 @@
-{% extends 'base.html' %}{% import 'macros.html' as m %}
-{% block content %}<section class="page-heading"><div><p class="eyebrow">GENERATION HISTORY</p><h1>Jobs</h1><p>Local runs, saved configuration and traceable results.</p></div><span class="workspace-label">{{ jobs|length }} total</span></section><section class="panel">{{ m.jobs_table(jobs) }}</section>{% endblock %}
+{% extends 'base.html' %}{% import 'macros.html' as m with context %}
+{% block content %}<section class="page-heading"><div><p class="eyebrow">{{ t('jobs.history') }}</p><h1>{{ t('nav.jobs') }}</h1><p>{{ t('jobs.description') }}</p></div><span class="workspace-label">{{ t('jobs.total', count=jobs|length) }}</span></section><section class="panel">{{ m.jobs_table(jobs) }}</section>{% endblock %}

@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from starlette.datastructures import UploadFile
+from mimic.web.i18n import WebInputError
 
 MAX_UPLOAD_BYTES = 16 * 1024 * 1024
 CONTEXT_MAX_BYTES = 256 * 1024
@@ -20,28 +21,28 @@ class UploadStore:
 
     def path(self, upload_id: str, role: str) -> Path:
         if role not in ROLES or str(UUID(upload_id)) != upload_id:
-            raise ValueError("Invalid source file reference. Please upload it again.")
+            raise WebInputError("error.source_reference")
         directory = self.root / upload_id
         path = directory / f"{role}.txt"
         if (self.root.is_symlink() or directory.is_symlink() or path.is_symlink()
                 or path.resolve().parent != self.root.resolve() / upload_id):
-            raise ValueError("Invalid source file reference. Please upload it again.")
+            raise WebInputError("error.source_reference")
         return path
 
     def existing(self, upload_id: str, role: str) -> str:
         try:
             path = self.path(upload_id, role)
         except (ValueError, AttributeError) as exc:
-            raise ValueError("Invalid source file reference. Please upload it again.") from exc
+            raise WebInputError("error.source_reference") from exc
         if not path.is_file():
-            raise ValueError("This source file is no longer available. Please upload it again.")
+            raise WebInputError("error.source_gone")
         return str(path)
 
     async def save(self, upload: UploadFile, role: str) -> str:
         suffix = Path(upload.filename or "").suffix.lower()
         allowed = (".txt",) if role == "context" else (".txt", ".lst", ".wordlist", ".dic")
         if suffix not in allowed:
-            raise ValueError(f"{role.title()} files must use {', '.join(allowed)}.")
+            raise WebInputError("error.extension", role=role, extensions=", ".join(allowed))
         upload_id = str(uuid4())
         path = self.path(upload_id, role)
         path.parent.mkdir(parents=True, exist_ok=False)
@@ -52,7 +53,7 @@ class UploadStore:
                 while chunk := await upload.read(64 * 1024):
                     count += len(chunk)
                     if count > limit:
-                        raise ValueError(f"{role.title()} file exceeds the {limit // 1024} KiB upload limit.")
+                        raise WebInputError("error.upload_limit", role=role, limit=limit // 1024)
                     stream.write(chunk)
         except BaseException:
             path.unlink(missing_ok=True)

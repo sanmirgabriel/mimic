@@ -138,7 +138,7 @@ def test_security_headers_static_types_traversal_and_sanitized_500(web, monkeypa
     def fail():
         raise RuntimeError("/home/user/private SQLite statement traceback")
     monkeypatch.setattr(app.state.repository, "list_jobs", fail)
-    error_client = TestClient(app, raise_server_exceptions=False)
+    error_client = TestClient(app, raise_server_exceptions=False, cookies={"mimic_locale": "en"})
     try:
         response = error_client.get("/")
         assert response.status_code == 500 and "unexpected error" in response.text

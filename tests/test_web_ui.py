@@ -26,7 +26,7 @@ from mimic.web.uploads import DRAFT_TTL_SECONDS, UploadStore
 @pytest.fixture
 def web(tmp_path):
     app = create_app(data_dir=tmp_path)
-    with TestClient(app) as client:
+    with TestClient(app, cookies={"mimic_locale": "en"}) as client:
         yield client, app
 
 
@@ -96,7 +96,7 @@ def test_crud_forms_all_fields_conflicts_and_generation_link(web):
     assert f"/generate?target_id={tid}" in client.get(f"/targets/{tid}").text
     assert "Joca\nJ" in client.get(f"/targets/{tid}").text
     assert "example.test\nlab.test" in client.get(f"/organizations/{oid}").text
-    assert "1 orgs · 1 targets" in client.get("/engagements").text
+    assert "1 org · 1 target" in client.get("/engagements").text
     for collection, item_id, values in (("engagements", eid, {"name": "Edited", "description": "New scope"}),
                                        ("organizations", oid, {**org_values, "keywords": "Updated"}),
                                        ("targets", tid, {**profile, "pet": "Sol"})):
@@ -267,7 +267,7 @@ def test_active_polling_real_cancellation_and_failed_worker(tmp_path):
             return Prepared()
 
     manager = JobManager(repo, paths, service=Service())
-    with TestClient(create_app(repository=repo, manager=manager)) as client:
+    with TestClient(create_app(repository=repo, manager=manager), cookies={"mimic_locale": "en"}) as client:
         try:
             response = submit(client, "/generate", quick(), follow_redirects=False)
             path = response.headers["location"]
@@ -294,7 +294,7 @@ def test_active_polling_real_cancellation_and_failed_worker(tmp_path):
             raise RuntimeError("secret traceback information")
 
     failed_manager = JobManager(repo, paths, service=FailingService())
-    with TestClient(create_app(repository=repo, manager=failed_manager)) as client:
+    with TestClient(create_app(repository=repo, manager=failed_manager), cookies={"mimic_locale": "en"}) as client:
         response = submit(client, "/generate", quick(), follow_redirects=False)
         path = response.headers["location"]
         assert failed_manager.wait(path.split("/")[-1], 5)["status"] == "failed"

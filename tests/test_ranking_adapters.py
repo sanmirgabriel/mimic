@@ -169,7 +169,7 @@ def test_real_v1_database_migration_preserves_records(tmp_path):
         assert len(connection.execute('SELECT * FROM candidate_preview').fetchall()) == 1
     # Existing completed files survive migration and repeated application startup.
     for _ in range(2):
-        with TestClient(create_app(repository=repo)) as client:
+        with TestClient(create_app(repository=repo), cookies={"mimic_locale": "en"}) as client:
             assert client.get(f'/api/jobs/{historical_id}/download').text == 'Ana\n'
             assert client.get(f'/api/jobs/{historical_id}/candidates').json()[0] == preview
             page = client.get(f'/jobs/{historical_id}').text
@@ -182,7 +182,7 @@ def csrf(client):
 
 def test_web_preview_ranked_job_download_and_historical_explanation(tmp_path,monkeypatch):
     app = create_app(data_dir=tmp_path)
-    with TestClient(app) as client:
+    with TestClient(app, cookies={"mimic_locale": "en"}) as client:
         page = client.get('/generate').text
         assert 'value="exhaustive" selected' in page and 'Output priority' in page
         organization = client.post('/api/organizations',json={'name':'ACME'}).json()
@@ -225,7 +225,7 @@ def test_web_preview_ranked_job_download_and_historical_explanation(tmp_path,mon
 
 def test_old_api_request_exhaustive_and_invalid_ranked_request(tmp_path):
     app=create_app(data_dir=tmp_path)
-    with TestClient(app) as client:
+    with TestClient(app, cookies={"mimic_locale": "en"}) as client:
         old=request().to_dict(); old.pop('ranking')
         submitted=client.post('/api/jobs',json={'request':old})
         assert submitted.status_code == 201
