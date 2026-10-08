@@ -80,7 +80,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--leet",
         choices=["none", "partial", "full"],
         default="partial",
-        help="Leet-speak mode (default: partial, max 2 subs per word).",
+        help="Leet-speak mode (default: partial, original + up to 2 substitutions per word).",
     )
     p.add_argument(
         "--combine",

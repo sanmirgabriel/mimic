@@ -22,8 +22,8 @@ class LeetMutator(StructuredMutator):
     """Applies leet-speak substitutions to a word.
 
     Args:
-        mode: ``"none"`` (no-op), ``"partial"`` (up to *max_subs*
-            simultaneous replacements), or ``"full"`` (replace every
+        mode: ``"none"`` (no-op), ``"partial"`` (original, then up to
+            *max_subs* simultaneous replacements), or ``"full"`` (replace every
             eligible character at once).
         max_subs: Maximum number of simultaneous substitutions in
             partial mode.  Ignored when *mode* is ``"full"`` or
@@ -57,8 +57,9 @@ class LeetMutator(StructuredMutator):
             yield self._substitute(candidate, lower, positions)
             return
 
-        # Partial: generate all combinations of 1..max_subs replacements.
-        seen: set[str] = set()
+        # Partial: preserve the zero-substitution cause before 1..max_subs.
+        yield candidate
+        seen: set[str] = {word}
         for count in range(1, min(self.max_subs, len(positions)) + 1):
             for combo in combinations(positions, count):
                 result = self._substitute(candidate, lower, combo)
