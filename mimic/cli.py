@@ -18,6 +18,8 @@ from mimic.application import (
     PolicyOptions,
     SourceOptions,
     IntelligenceOptions,
+    RankingOptions,
+    GenerationResult,
 )
 from mimic.core.candidate import Candidate, Origin
 from mimic.core.sink import Sink
@@ -55,6 +57,10 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--intelligence", action=argparse.BooleanOptionalAction, default=None,
                    help="Password Intelligence (default on for generate; off for legacy invocation).")
     p.add_argument("--reference-year", type=int, help="Freeze recent-year knowledge at this year.")
+    p.add_argument("--budget", type=RankingOptions.from_budget, default=RankingOptions(),
+                   metavar="PRESET|N", help="Output priority: quick=100, focused=1000, balanced=10000, "
+                   "large=100000, exhaustive (default), or a positive integer. Finite budgets rank "
+                   "and retain K outputs according to score-v1 after scanning the whole accepted stream; they do not limit CPU work.")
     p.add_argument("--context", help="Deterministic field:value context file.")
     p.add_argument("--dataset", action="append", default=[], help="Local seed corpus (repeatable).")
     p.add_argument("--candidates", action="append", default=[], help="Ready candidates file (repeatable).")
@@ -338,6 +344,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     request = GenerationRequest(
+        ranking=args.budget,
         target=Target(profile.nome or "", profile) if profile is not None else None,
         organization=Organization(args.organization) if args.organization else None,
         intelligence=IntelligenceOptions(
@@ -373,7 +380,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     sink = Sink(output_path=args.output)
 
-    values = _trace(prepared.iter_candidates()) if args.debug else prepared.iter_values()
+    if args.debug:
+        values = (_trace_results(prepared.iter_results()) if request.ranking.enabled
+                  else _trace(prepared.iter_candidates()))
+    else:
+        values = prepared.iter_values()
 
     try:
         count = sink.drain(values)
@@ -412,6 +423,14 @@ def _inspect_profile(path: str) -> int:
         return 1
     print(json.dumps(data, ensure_ascii=False, indent=2))
     return 0
+
+
+def _trace_results(results: Iterator[GenerationResult]) -> Iterator[str]:
+    for result in results:
+        if result.score is not None:
+            logger.debug("rank=%d score=%d model=%s components=%s", result.rank, result.score.total,
+                         result.score.version, json.dumps(result.score.to_dict()["components"], ensure_ascii=False))
+        yield from _trace(iter((result.candidate,)))
 
 
 def _trace(candidates: Iterator[Candidate]) -> Iterator[str]:

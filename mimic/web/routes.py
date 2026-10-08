@@ -23,8 +23,10 @@ from mimic.application import (
     ApplicationError, GenerationLimits, GenerationRequest, GenerationService,
     MutationOptions, PolicyOptions, SourceOptions,
     IntelligenceOptions,
+    RankingOptions,
 )
 from mimic.intelligence.builtins import SERVICE_PROFILES
+from mimic.ranking import BUDGET_PRESETS
 from mimic.domain.context import KeyValueContextExtractor
 from mimic.domain.models import Organization, Target
 from mimic.profile.schema import TargetProfile
@@ -115,7 +117,7 @@ def mount_web(app: FastAPI) -> None:
     templates = Jinja2Templates(directory=str(assets / "templates"))
     templates.env.globals.update(version=__version__, collections=COLLECTIONS, profile_fields=PROFILE_FIELDS,
                                  list_fields=LIST_FIELDS, origin_label=origin_label, step_labels=STEPS,
-                                 service_profiles=SERVICE_PROFILES)
+                                 service_profiles=SERVICE_PROFILES, budget_presets=BUDGET_PRESETS)
     app.mount("/static", StaticFiles(directory=str(assets / "static")), name="static")
     records = app.state.records
     repo = app.state.repository
@@ -186,7 +188,7 @@ def mount_web(app: FastAPI) -> None:
 
     async def generation_page(request: Request, values=None, *, error=None, summary=None, warnings=(), status=200):
         defaults = {"mode": "quick", "leet_mode": "partial", "separators": "@!#_.", "min_len": "0",
-                    "max_len": "0", "max_candidates_per_word": "5000", "max_dataset_lines": "100000"}
+                    "max_len": "0", "output_priority": "exhaustive", "max_candidates_per_word": "5000", "max_dataset_lines": "100000"}
         if values is None or "intelligence_form" not in values:
             defaults.update({key: "on" for key in ("intelligence_enabled", "common_numbers", "recent_years", "corporate_roles")})
         return render(request, "generate.html", status=status, title="New generation", nav="generate",
@@ -268,7 +270,15 @@ def mount_web(app: FastAPI) -> None:
             service_profiles=tuple(form.getlist("service_profiles")), reference_year=year,
         )
         values["selected_services"] = list(intelligence.service_profiles)
-        result = GenerationRequest(target=target, organization=organization, context_facts=tuple(facts),
+        priority = values.get("output_priority", "exhaustive")
+        if priority not in (*BUDGET_PRESETS, "custom"):
+            raise ValueError("Choose a valid output priority.")
+        try:
+            ranking = (RankingOptions(True, int(values.get("custom_budget", "")))
+                       if priority == "custom" else RankingOptions.from_budget(priority))
+        except (ValueError, TypeError) as exc:
+            raise ValueError("Custom output budget must be a positive whole number.") from exc
+        result = GenerationRequest(ranking=ranking, target=target, organization=organization, context_facts=tuple(facts),
                                    intelligence=intelligence,
                                    context_path=source_paths.get("context"),
                                    mutations=MutationOptions(values.get("leet_mode", "partial"),
@@ -331,6 +341,11 @@ def mount_web(app: FastAPI) -> None:
             generation = GenerationRequest.from_dict(job["request"])
             prepared = await run_in_threadpool(GenerationService().prepare, generation)
             summary, warnings = prepared.summary().to_dict(), prepared.warnings
+            # Historical job scores use their persisted model, even after a future upgrade.
+            if summary["ranking"]["enabled"]:
+                stored_version = next((item["score_version"] for item in preview if item["score_version"]), None)
+                if stored_version is not None:
+                    summary["score_version"] = stored_version
         except (ApplicationError, ValueError, TypeError, OSError):
             warnings = ("Configuration summary is unavailable; the original request remains saved.",)
         return render(request, "job.html", title="Generation detail", nav="jobs", job=job,

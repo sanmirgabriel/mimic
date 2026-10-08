@@ -16,6 +16,10 @@ from mimic.persistence import DataPaths, Repository
 logger = logging.getLogger(__name__)
 
 
+class _Cancelled(Exception):
+    """Internal cooperative interruption, independent of application policy."""
+
+
 class JobManager:
     def __init__(self, repository: Repository, paths: DataPaths,
                  service: GenerationService | None = None, workers: int = 1,
@@ -185,6 +189,7 @@ class JobManager:
         part = output.with_name(output.name + ".part")
         count = 0
         preview: list[dict] = []
+        prepared = None
         try:
             job = self.repository.get_job(job_id)
             with self._lock:
@@ -194,18 +199,35 @@ class JobManager:
                 raise ValueError("job output directory is not managed")
             request = GenerationRequest.from_dict(job["request"])
             prepared = self.service.prepare(request)
+            last_evaluated = 0
+
+            def checkpoint() -> None:
+                nonlocal last_evaluated
+                if cancellation.is_set() or self._stopping.is_set():
+                    raise _Cancelled()
+                evaluated = prepared.evaluated_count
+                if evaluated - last_evaluated >= self.count_batch:
+                    self.repository.set_evaluated_count(job_id, evaluated)
+                    last_evaluated = evaluated
+
             with part.open("x", encoding="utf-8") as stream:
-                for candidate in prepared.iter_candidates():
-                    if cancellation.is_set() or self._stopping.is_set():
-                        break
+                for result in prepared.iter_results(checkpoint=checkpoint):
+                    checkpoint()
+                    candidate = result.candidate
                     stream.write(candidate.value + "\n")
                     count += 1
                     if len(preview) < self.preview_limit:
                         preview.append({"sequence": count, "value": candidate.value,
                                         "origins": [asdict(x) for x in candidate.origins],
-                                        "transformations": [asdict(x) for x in candidate.transformations]})
+                                        "transformations": [asdict(x) for x in candidate.transformations],
+                                        "rank": result.rank,
+                                        "score": result.score.total if result.score else None,
+                                        "score_version": result.score.version if result.score else None,
+                                        "score_components": [asdict(x) for x in result.score.components]
+                                            if result.score else None})
                     if count % self.count_batch == 0:
                         self.repository.set_count(job_id, count)
+            self.repository.set_evaluated_count(job_id, prepared.evaluated_count)
             self.repository.add_preview(job_id, preview)
             if cancellation.is_set() or self._stopping.is_set() or self.repository.get_job(job_id)["cancel_requested"]:
                 self.repository.finish_job(job_id, "cancelled", count)
@@ -214,7 +236,13 @@ class JobManager:
                 if not self.repository.complete_job(job_id, count, str(output)):
                     output.unlink(missing_ok=True)
                     self.repository.finish_job(job_id, "cancelled", count)
+        except _Cancelled:
+            self.repository.set_evaluated_count(job_id, prepared.evaluated_count)
+            self.repository.add_preview(job_id, preview)
+            self.repository.finish_job(job_id, "cancelled", count)
         except Exception as exc:
+            if prepared is not None:
+                self.repository.set_evaluated_count(job_id, prepared.evaluated_count)
             logger.exception("generation failed for job %s", job_id)
             if self._is_managed_job_dir(job_id):
                 output.unlink(missing_ok=True)

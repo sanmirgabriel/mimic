@@ -16,7 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from mimic.api import create_app
-from mimic.application import GenerationRequest
+from mimic.application import GenerationRequest, GenerationResult
 from mimic.core.candidate import Candidate, Origin, Transformation
 from mimic.jobs import JobManager
 from mimic.persistence import DataPaths, Database, Repository
@@ -253,10 +253,14 @@ def test_active_polling_real_cancellation_and_failed_worker(tmp_path):
     class Service:
         def prepare(self, request):
             class Prepared:
-                def iter_candidates(self):
+                evaluated_count = 0
+
+                def iter_results(self, checkpoint=None):
                     entered.set()
                     release.wait(10)
-                    yield Candidate("one")
+                    checkpoint()
+                    self.evaluated_count += 1
+                    yield GenerationResult(Candidate("one"))
             return Prepared()
 
     manager = JobManager(repo, paths, service=Service())
@@ -396,7 +400,7 @@ class NoWeb(importlib.abc.MetaPathFinder):
             raise ImportError('Web dependencies unavailable')
 sys.meta_path.insert(0, NoWeb())
 import mimic.core, mimic.domain, mimic.application, mimic.cli
-from mimic.application import GenerationRequest, GenerationService
+from mimic.application import GenerationRequest, GenerationResult, GenerationService
 from mimic.core.candidate import Candidate
 assert list(GenerationService().prepare(GenerationRequest(base_candidates=(Candidate('Pedro'),))).iter_candidates())
 assert 'mimic.web.routes' not in sys.modules

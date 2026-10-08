@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from mimic.api import create_app
 from mimic.application import GenerationRequest
 from mimic.core.candidate import Candidate, Origin
+from mimic.ranking import GenerationResult
 from mimic.jobs import JobManager
 from mimic.persistence import DataPaths, Database, Repository
 from mimic.persistence.repository import StorageConflict
@@ -123,6 +124,15 @@ def test_job_cancel_and_failure_no_final_output(tmp_path):
     release = threading.Event()
 
     class BlockingPrepared:
+        evaluated_count = 0
+
+        def iter_results(self, checkpoint=None):
+            for candidate in self.iter_candidates():
+                if checkpoint:
+                    checkpoint()
+                self.evaluated_count += 1
+                yield GenerationResult(candidate)
+
         def iter_candidates(self):
             entered.set()
             release.wait(5)
@@ -144,6 +154,15 @@ def test_job_cancel_and_failure_no_final_output(tmp_path):
     manager.stop()
 
     class FailingPrepared:
+        evaluated_count = 0
+
+        def iter_results(self, checkpoint=None):
+            for candidate in self.iter_candidates():
+                if checkpoint:
+                    checkpoint()
+                self.evaluated_count += 1
+                yield GenerationResult(candidate)
+
         def iter_candidates(self):
             yield Candidate("first")
             raise RuntimeError("secret internal detail")
@@ -169,6 +188,15 @@ def test_pending_cancel_and_single_prepare(tmp_path):
     release = threading.Event()
 
     class Prepared:
+        evaluated_count = 0
+
+        def iter_results(self, checkpoint=None):
+            for candidate in self.iter_candidates():
+                if checkpoint:
+                    checkpoint()
+                self.evaluated_count += 1
+                yield GenerationResult(candidate)
+
         def iter_candidates(self):
             entered.set()
             release.wait(5)
@@ -250,10 +278,14 @@ def test_http_download_rejects_running_and_cancelled(tmp_path):
     class Service:
         def prepare(self, request):
             class Prepared:
-                def iter_candidates(self):
+                evaluated_count = 0
+
+                def iter_results(self, checkpoint=None):
                     entered.set()
                     release.wait(5)
-                    yield Candidate("one")
+                    checkpoint()
+                    self.evaluated_count += 1
+                    yield GenerationResult(Candidate("one"))
             return Prepared()
 
     manager = JobManager(repo, paths, service=Service())
