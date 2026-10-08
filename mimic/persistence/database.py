@@ -55,7 +55,7 @@ class Database:
         with self.connection() as connection:
             connection.execute("PRAGMA journal_mode = WAL")
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1):
+            if version not in (0, 1, 2):
                 raise RuntimeError(f"unsupported database schema version: {version}")
             connection.executescript("""
                 CREATE TABLE IF NOT EXISTS engagements (
@@ -89,4 +89,13 @@ class Database:
                 );
                 CREATE INDEX IF NOT EXISTS jobs_created_idx ON jobs(created_at DESC);
             """)
-            connection.execute("PRAGMA user_version = 1")
+            connection.execute("BEGIN IMMEDIATE")
+            # ALTER preserves v1 rows and explanations. NULL marks historical unknowns.
+            for table, columns in {"jobs": {"evaluated_count": "INTEGER"},
+                    "candidate_preview": {"rank": "INTEGER", "score": "INTEGER",
+                        "score_version": "TEXT", "score_components": "TEXT"}}.items():
+                existing = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+                for column, sql_type in columns.items():
+                    if column not in existing:
+                        connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}")
+            connection.execute("PRAGMA user_version = 2")

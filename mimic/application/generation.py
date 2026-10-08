@@ -15,7 +15,7 @@ dataset files, generate candidates or start work. Execution happens only when
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, replace
 from itertools import chain
 import re
@@ -31,6 +31,9 @@ from mimic.domain.planning import BehaviorPattern, PreparedGeneration as Planned
 from mimic.domain.planning import prepare_generation
 from mimic.intelligence.builtins import KNOWLEDGE_VERSION
 from mimic.intelligence.planning import IntelligencePlan, plan_intelligence
+from mimic.ranking import GenerationResult, RankingOptions, SCORE_VERSION
+from mimic.ranking.scoring import score_candidate
+from mimic.ranking.topk import select_top_k
 
 
 @dataclass(frozen=True)
@@ -71,6 +74,10 @@ class GenerationPlanSummary:
     knowledge_template_seed_count: int
     service_derived_seed_count: int
 
+    ranking: RankingOptions
+    ranking_preset: str
+    score_version: str | None
+
     def to_dict(self) -> dict:
         from dataclasses import asdict
 
@@ -99,6 +106,9 @@ class PreparedGeneration:
         self._warnings = warnings
         self._summary = summary
         self._started = False
+        self.evaluated_count = 0
+        self._ranking = request.ranking
+        self._reference_year = request.intelligence.reference_year
 
     @property
     def request(self) -> GenerationRequest:
@@ -115,15 +125,41 @@ class PreparedGeneration:
     def summary(self) -> GenerationPlanSummary:
         return self._summary
 
-    def iter_candidates(self) -> Iterator[Candidate]:
-        """Claim and stream this one-shot plan; a second claim is an error."""
+    def _claim_candidates(self, checkpoint: Callable[[], None] | None = None) -> Iterator[Candidate]:
+        """Reserve immediately and count the policy-accepted Core stream."""
         if self._started:
             raise ApplicationError("PreparedGeneration stream has already been requested")
         self._started = True
-        return self._planned.generator.generate_candidates()
+
+        def evaluated() -> Iterator[Candidate]:
+            for candidate in self._planned.generator.generate_candidates():
+                if checkpoint is not None:
+                    checkpoint()
+                self.evaluated_count += 1
+                yield candidate
+
+        return evaluated()
+
+    def iter_results(self, checkpoint: Callable[[], None] | None = None) -> Iterator[GenerationResult]:
+        """Claim once. Checkpoints may raise to interrupt scanning before final output.
+
+        Ranking scans every policy-accepted candidate and retains only the budget.
+        Exhaustive results stream immediately without invoking scoring or Top-K.
+        """
+        candidates = self._claim_candidates(checkpoint)
+        if self._ranking.enabled:
+            return select_top_k(candidates, self._ranking.budget,
+                                lambda candidate: score_candidate(candidate, self._reference_year))
+        return (GenerationResult(candidate) for candidate in candidates)
+
+    def iter_candidates(self) -> Iterator[Candidate]:
+        """Claim and project the same one-shot result stream to Core candidates."""
+        if not self._ranking.enabled:
+            return self._claim_candidates()
+        return (result.candidate for result in self.iter_results())
 
     def iter_values(self) -> Iterator[str]:
-        """Stream candidate values, in the same order as :meth:`iter_candidates`."""
+        """Stream values in exhaustive encounter order or retained priority order."""
         return (candidate.value for candidate in self.iter_candidates())
 
 
@@ -300,6 +336,9 @@ class GenerationService:
             knowledge_version=KNOWLEDGE_VERSION,
             knowledge_template_seed_count=sum(any(step.kind == "knowledge_template" for step in seed.candidate.transformations)
                                             for seed in knowledge.seeds),
+            ranking=request.ranking,
+            ranking_preset=request.ranking.preset,
+            score_version=SCORE_VERSION if request.ranking.enabled else None,
             service_derived_seed_count=sum(any(origin.source == "knowledge" and origin.field.startswith("service.")
                                           for origin in seed.candidate.origins) for seed in knowledge.seeds),
         )

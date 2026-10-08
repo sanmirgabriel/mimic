@@ -25,6 +25,7 @@ from mimic.domain.context import ExtractedFact
 from mimic.domain.models import Organization, Target
 from mimic.profile.schema import TargetProfile
 from mimic.intelligence import IntelligenceOptions
+from mimic.ranking import RankingOptions
 from mimic.intelligence.builtins import get_service_profile
 
 LEET_MODES = ("none", "partial", "full")
@@ -72,7 +73,7 @@ class PolicyOptions:
 
 @dataclass(frozen=True)
 class GenerationLimits:
-    """Bounds on generation cost. Global budgets/ranking are a later block."""
+    """Bounds on expansion cost; ranking budgets independently limit retained outputs."""
 
     max_candidates_per_word: int = 5000
     max_dataset_lines: int = 100_000
@@ -183,6 +184,7 @@ class GenerationRequest:
         policy: Password policy configuration.
         limits: Generation cost bounds.
         intelligence: Bounded knowledge inputs; enabled requests capture a reference year.
+        ranking: Opt-in priority and retained output budget; exhaustive by default.
     """
 
     target: Target | None = None
@@ -197,6 +199,7 @@ class GenerationRequest:
     policy: PolicyOptions = field(default_factory=PolicyOptions)
     limits: GenerationLimits = field(default_factory=GenerationLimits)
     intelligence: IntelligenceOptions = field(default_factory=lambda: IntelligenceOptions(enabled=False))
+    ranking: RankingOptions = field(default_factory=RankingOptions)
 
     def __post_init__(self) -> None:
         self.base_candidates = tuple(self.base_candidates)
@@ -219,6 +222,7 @@ class GenerationRequest:
             ("policy", self.policy, PolicyOptions),
             ("limits", self.limits, GenerationLimits),
             ("intelligence", self.intelligence, IntelligenceOptions),
+            ("ranking", self.ranking, RankingOptions),
         ):
             if not isinstance(value, expected):
                 raise InvalidGenerationRequest(f"{name} must be a {expected.__name__}")
@@ -298,6 +302,7 @@ class GenerationRequest:
             "policy": asdict(self.policy),
             "limits": asdict(self.limits),
             "intelligence": self.intelligence.to_dict(),
+            "ranking": self.ranking.to_dict(),
         }
 
     @classmethod
@@ -330,6 +335,7 @@ class GenerationRequest:
                 policy=PolicyOptions.from_dict(data.get("policy", {})),
                 limits=GenerationLimits.from_dict(data.get("limits", {})),
                 intelligence=IntelligenceOptions.from_dict(data.get("intelligence", {"enabled": False})),
+                ranking=RankingOptions.from_dict(data.get("ranking", {})),
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise InvalidGenerationRequest(f"malformed request payload: {exc}") from exc

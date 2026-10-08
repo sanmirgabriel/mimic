@@ -6,6 +6,8 @@ HTML, templating or any database. Adapters translate their input into a
 owns source precedence, mutator/policy assembly and Generator construction.
 """
 
+from mimic.ranking import RankingOptions, GenerationResult
+
 from mimic.application.errors import ApplicationError, InvalidGenerationRequest
 from mimic.application.generation import (
     GenerationPlanSummary,
@@ -33,4 +35,6 @@ __all__ = [
     "GenerationLimits",
     "SourceOptions",
     "IntelligenceOptions",
+    "RankingOptions",
+    "GenerationResult",
 ]

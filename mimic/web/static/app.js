@@ -67,3 +67,10 @@ function pollingError() {
 }
 document.addEventListener("htmx:responseError", pollingError);
 document.addEventListener("htmx:sendError", pollingError);
+
+const prioritySelect = document.querySelector('[name="output_priority"]');
+if (prioritySelect) {
+  prioritySelect.addEventListener('change', () => {
+    document.querySelector('[data-custom-budget]').hidden = prioritySelect.value !== 'custom';
+  });
+}

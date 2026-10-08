@@ -41,6 +41,7 @@ class Repository:
         elif table == "candidate_preview":
             item["origins"] = json.loads(item.pop("origins_json"))
             item["transformations"] = json.loads(item.pop("transformations_json"))
+            item["score_components"] = json.loads(item["score_components"]) if item["score_components"] is not None else None
         return item
 
     def _get(self, table: str, item_id: str) -> dict | None:
@@ -175,7 +176,7 @@ class Repository:
             "status": "pending", "request_json": json.dumps(request, ensure_ascii=False),
             "target_id": target_id, "engagement_id": engagement_id,
             "created_at": utc_now(), "started_at": None, "finished_at": None,
-            "candidate_count": 0, "error": None, "cancel_requested": 0, "output_path": None,
+            "candidate_count": 0, "evaluated_count": 0, "error": None, "cancel_requested": 0, "output_path": None,
         })
 
     def list_jobs(self) -> list[dict]:
@@ -192,6 +193,11 @@ class Repository:
                 (utc_now(), item_id),
             )
             return cursor.rowcount > 0
+
+    def set_evaluated_count(self, item_id: str, count: int) -> None:
+        with self.database.connection() as connection:
+            connection.execute("UPDATE jobs SET evaluated_count = ? WHERE id = ? AND status = 'running'",
+                               (count, item_id))
 
     def set_count(self, item_id: str, count: int) -> None:
         with self.database.connection() as connection:
@@ -249,11 +255,13 @@ class Repository:
         with self.database.connection() as connection:
             connection.executemany(
                 "INSERT INTO candidate_preview "
-                "(job_id, sequence, value, origins_json, transformations_json) "
-                "VALUES (?, ?, ?, ?, ?)",
+                "(job_id, sequence, value, origins_json, transformations_json, rank, score, score_version, score_components) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [(item_id, c["sequence"], c["value"],
                   json.dumps(c["origins"], ensure_ascii=False),
-                  json.dumps(c["transformations"], ensure_ascii=False)) for c in candidates],
+                  json.dumps(c["transformations"], ensure_ascii=False), c.get("rank"), c.get("score"),
+                  c.get("score_version"), json.dumps(c["score_components"], ensure_ascii=False)
+                  if c.get("score_components") is not None else None) for c in candidates],
             )
 
     def list_preview(self, item_id: str, limit: int = 200, offset: int = 0) -> list[dict]:

@@ -19,6 +19,7 @@ from mimic import __version__
 from mimic.api import create_app
 from mimic.application import GenerationRequest, MutationOptions, SourceOptions
 from mimic.core.candidate import Candidate, Origin, Transformation
+from mimic.ranking import GenerationResult
 from mimic.jobs import JobManager
 from mimic.persistence import DataPaths, Database, Repository
 
@@ -86,6 +87,15 @@ def test_duplicate_queue_entry_is_executed_once(tmp_path):
                 calls += 1
 
             class Prepared:
+                evaluated_count = 0
+
+                def iter_results(self, checkpoint=None):
+                    for candidate in self.iter_candidates():
+                        if checkpoint:
+                            checkpoint()
+                        self.evaluated_count += 1
+                        yield GenerationResult(candidate)
+
                 def iter_candidates(self):
                     yield Candidate("only-once")
 
@@ -159,6 +169,15 @@ def test_concurrent_read_and_double_cancel(tmp_path):
     class Service:
         def prepare(self, req):
             class Prepared:
+                evaluated_count = 0
+
+                def iter_results(self, checkpoint=None):
+                    for candidate in self.iter_candidates():
+                        if checkpoint:
+                            checkpoint()
+                        self.evaluated_count += 1
+                        yield GenerationResult(candidate)
+
                 def iter_candidates(self):
                     entered.set()
                     assert release.wait(5)
@@ -224,6 +243,15 @@ def test_shutdown_and_lifecycle_are_cooperative(tmp_path):
     class Service:
         def prepare(self, req):
             class Prepared:
+                evaluated_count = 0
+
+                def iter_results(self, checkpoint=None):
+                    for candidate in self.iter_candidates():
+                        if checkpoint:
+                            checkpoint()
+                        self.evaluated_count += 1
+                        yield GenerationResult(candidate)
+
                 def iter_candidates(self):
                     entered.set()
                     release.wait(5)
@@ -312,6 +340,15 @@ def test_dataset_contents_are_lazy_while_request_is_snapshotted(tmp_path):
         def prepare(self, req):
             if req.base_candidates and req.base_candidates[0].value == "BLOCK":
                 class Prepared:
+                    evaluated_count = 0
+
+                    def iter_results(self, checkpoint=None):
+                        for candidate in self.iter_candidates():
+                            if checkpoint:
+                                checkpoint()
+                            self.evaluated_count += 1
+                            yield GenerationResult(candidate)
+
                     def iter_candidates(self):
                         entered.set()
                         release.wait(5)
@@ -373,6 +410,15 @@ def test_symlink_job_directory_cannot_write_outside_data_dir(tmp_path):
         def prepare(self, req):
             if req.base_candidates and req.base_candidates[0].value == "BLOCK":
                 class Prepared:
+                    evaluated_count = 0
+
+                    def iter_results(self, checkpoint=None):
+                        for candidate in self.iter_candidates():
+                            if checkpoint:
+                                checkpoint()
+                            self.evaluated_count += 1
+                            yield GenerationResult(candidate)
+
                     def iter_candidates(self):
                         entered.set()
                         release.wait(5)
@@ -513,7 +559,7 @@ def test_uuid_patch_crud_and_download_containment(tmp_path):
 def test_schema_version_and_utc_timestamps(tmp_path):
     paths, repo = storage(tmp_path)
     with repo.database.connection() as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 1
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
         assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
         assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
         assert connection.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
@@ -525,7 +571,7 @@ def test_schema_version_and_utc_timestamps(tmp_path):
         parsed = datetime.fromisoformat(saved[field])
         assert parsed.tzinfo == timezone.utc
     with sqlite3.connect(paths.database) as connection:
-        connection.execute("PRAGMA user_version = 2")
+        connection.execute("PRAGMA user_version = 3")
     with pytest.raises(RuntimeError, match="unsupported database schema version"):
         repo.database.initialize()
 
