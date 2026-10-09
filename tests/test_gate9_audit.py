@@ -416,7 +416,9 @@ def test_pending_job_pins_order_metadata_and_exact_version(registry,change):
 @pytest.mark.parametrize('contents,physical,values',[
     (b'',0,[]),(b'\n'*10000,10000,[]),(b'# comment\n'*10000,10000,[]),
     ('# skip\r\n\r\n recepção \r\nfinanceiro'.encode(),4,['recepção','financeiro']),
-    (b'x'*1024*1024,1,['x'*1024*1024]),(b'First\rSecond\r\nThird\n',3,['First','Second','Third'])])
+    (b'x'*1024*1024,1,['x'*1024*1024]),(b'First\rSecond\r\nThird\n',3,['First','Second','Third'])],
+    ids=['empty', 'blank-lines-10000', 'comments-10000', 'utf8-crlf',
+         'single-line-1mib', 'mixed-newlines'])
 def test_physical_lines_and_large_single_line(registry,contents,physical,values):
     metadata=install(registry,contents,kind='ready')
     assert metadata.line_count==physical and metadata.size_bytes==len(contents)

@@ -82,7 +82,9 @@ def test_idempotency_conflict_and_versions(registry):
 
 @pytest.mark.parametrize('contents,lines', [(b'', 0), (b'a', 1), (b'a\n', 1),
     (b'\n\n', 2), (b'a\r\nb\rc\n\n# comment', 5),
-    (b'a' * 65535 + b'\r\nb', 2), (b'a' * 65535 + 'ç\n'.encode(), 1)])
+    (b'a' * 65535 + b'\r\nb', 2), (b'a' * 65535 + 'ç\n'.encode(), 1)],
+    ids=['empty', 'single-line', 'trailing-newline', 'blank-lines',
+         'mixed-newlines', 'chunk-boundary-crlf', 'chunk-boundary-utf8'])
 def test_physical_lines_and_chunk_boundary_utf8(registry, contents, lines):
     pack = install(registry, contents, kind='ready')
     assert pack.line_count == lines
