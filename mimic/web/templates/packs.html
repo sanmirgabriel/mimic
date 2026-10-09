@@ -1,0 +1,19 @@
+{% extends 'base.html' %}{% import 'macros.html' as m with context %}
+{% block content %}
+<section class="page-heading"><div><p class="eyebrow">{{ t('source.heading') }}</p><h1>{{ t('pack.heading') }}</h1><p>{{ t('pack.description') }}</p></div></section>
+{% include 'feedback.html' %}
+{% if selected %}<section class="panel summary-panel pack-record"><div class="panel-heading"><div><h2>{{ selected.name }}</h2><p class="mono">{{ selected.identity }}</p></div><a href="/packs">{{ t('pack.heading') }}</a></div>
+<dl class="summary-list">{% for field,key in [('version','pack.version'),('language','pack.language'),('license','pack.license'),('size_bytes','pack.size'),('line_count','pack.lines'),('filename','pack.filename'),('attribution','pack.attribution')] %}<div><dt>{{ t(key) }}</dt><dd>{{ selected[field] }}</dd></div>{% endfor %}<div><dt>{{ t('pack.kind') }}</dt><dd>{{ t('pack.' + selected.kind) }}</dd></div><div><dt>{{ t('pack.sha') }}</dt><dd class="pack-digest mono">{{ selected.sha256 }}</dd></div></dl>
+{% if selected.description %}<p>{{ selected.description }}</p>{% endif %}{% if selected.source_url %}<p><a href="{{ selected.source_url }}" rel="noreferrer">{{ t('pack.source') }}</a></p>{% endif %}
+<p>{{ t('pack.verified') if verified else t('pack.recorded') }}</p>
+{% if selected.license == 'NOASSERTION' %}<div class="alert warning">{{ t('pack.license_unknown') }}</div>{% endif %}<p class="muted">{{ t('pack.license_declared') }}</p>
+<form action="/packs/{{ selected.identity }}/verify" method="post" data-submit><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button secondary" type="submit">{{ t('pack.verify') }}</button></form></section>{% endif %}
+<div class="two-columns"><section class="panel summary-panel"><div class="panel-heading"><h2>{{ t('pack.heading') }}</h2></div>
+{% if packs %}<div class="pack-list">{% for pack in packs %}<article class="summary-section"><h3><a href="/packs/{{ pack.identity }}">{{ pack.name }}</a></h3><p class="mono">{{ pack.identity }}</p><p class="muted">{{ t('pack.' + pack.kind) }} · {{ pack.language }} · {{ pack.license }}</p><p>{{ t('pack.integrity') }}: {{ t('pack.recorded') }}</p>{% if pack.license == 'NOASSERTION' %}<small>{{ t('pack.license_unknown') }}</small>{% endif %}<p><a href="/packs/{{ pack.identity }}">{{ t('pack.details') }} →</a></p></article>{% endfor %}</div>{% else %}<p class="muted">{{ t('pack.empty') }}</p>{% endif %}</section>
+<form class="panel form-panel" action="/packs/import" method="post" enctype="multipart/form-data" data-submit><h2>{{ t('pack.import') }}</h2><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><p class="muted">{{ t('pack.help') }}</p>
+<div class="field"><label for="pack_file">{{ t('pack.file') }}</label><input id="pack_file" type="file" name="pack_file" accept=".txt,.lst,.wordlist,.dic" required></div>
+{{ m.input('id',t('pack.id'),values,required=true,help=t('pack.identity_help')) }}{{ m.input('version',t('pack.version'),values,required=true) }}{{ m.input('name',t('pack.name'),values) }}
+<div class="field"><label for="kind">{{ t('pack.kind') }}</label><select id="kind" name="kind" required><option value="">—</option>{% for kind in ['seed','ready'] %}<option value="{{ kind }}" {% if values.get('kind') == kind %}selected{% endif %}>{{ t('pack.' + kind) }}</option>{% endfor %}</select></div>
+{{ m.input('language',t('pack.language'),values,placeholder='pt-BR') }}{{ m.input('license',t('pack.license'),values,placeholder='NOASSERTION') }}{{ m.input('source_url',t('pack.source'),values,type='url') }}{{ m.input('attribution',t('pack.attribution'),values) }}{{ m.input('description',t('field.description'),values) }}
+<p class="muted">{{ t('pack.license_declared') }}</p><button class="button primary" type="submit">{{ t('pack.import') }}</button></form></div>
+{% endblock %}

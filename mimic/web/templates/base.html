@@ -19,7 +19,7 @@
       <span>MIMIC<small>{{ t('layout.local_workspace') }}</small></span>
     </a>
     <nav>
-      {% for key, path, symbol in [('dashboard','/','◈'), ('engagements','/engagements','▣'), ('organizations','/organizations','◇'), ('targets','/targets','◎'), ('generate','/generate','↗'), ('jobs','/jobs','≡')] %}
+      {% for key, path, symbol in [('dashboard','/','◈'), ('engagements','/engagements','▣'), ('organizations','/organizations','◇'), ('targets','/targets','◎'), ('generate','/generate','↗'), ('jobs','/jobs','≡'), ('packs','/packs','▤')] %}
       <a href="{{ path }}" class="nav-link{% if nav == key %} active{% endif %}" {% if nav == key %}aria-current="page"{% endif %}><span aria-hidden="true">{{ symbol }}</span>{{ t('nav.' + key) }}</a>
       {% endfor %}
     </nav>

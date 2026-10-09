@@ -1,0 +1,7 @@
+# Original demonstration vocabulary; no frequency or popularity claim.
+financeiro
+diretoria
+recepção
+contabilidade
+suporte
+operacional

@@ -27,6 +27,7 @@ from mimic.profile.schema import TargetProfile
 from mimic.intelligence import IntelligenceOptions
 from mimic.ranking import RankingOptions
 from mimic.intelligence.builtins import get_service_profile
+from mimic.packs.models import PackReference, PackError
 
 LEET_MODES = ("none", "partial", "full")
 
@@ -98,6 +99,7 @@ class SourceOptions:
     dataset_paths: tuple[str, ...] = ()
     ready_candidate_paths: tuple[str, ...] = ()
     include_ptbr: bool = False
+    packs: tuple[PackReference, ...] = ()
 
     def __post_init__(self) -> None:
         for name, paths in (("dataset_paths", self.dataset_paths),
@@ -108,6 +110,18 @@ class SourceOptions:
                 raise TypeError(f"{name} must be a sequence of strings")
         object.__setattr__(self, "dataset_paths", tuple(self.dataset_paths))
         object.__setattr__(self, "ready_candidate_paths", tuple(self.ready_candidate_paths))
+        if (not isinstance(self.packs, (tuple, list)) or len(self.packs) > 64 or
+                any(not isinstance(pack, PackReference) for pack in self.packs)):
+            raise PackError('snapshot', "packs must contain at most 64 digest-pinned PackReference objects")
+        if len({pack.identity for pack in self.packs}) != len(self.packs):
+            raise PackError('snapshot', "duplicate pack selections")
+        object.__setattr__(self, "packs", tuple(self.packs))
+
+    def to_dict(self):
+        data = asdict(self)
+        if not self.packs:
+            del data['packs']  # Preserve the JSON contract of requests without packs.
+        return data
 
     @classmethod
     def from_dict(cls, data: dict) -> "SourceOptions":
@@ -115,6 +129,7 @@ class SourceOptions:
             dataset_paths=data.get("dataset_paths", ()),
             ready_candidate_paths=data.get("ready_candidate_paths", ()),
             include_ptbr=data.get("include_ptbr", False),
+            packs=tuple(PackReference.from_dict(p) for p in data.get('packs', ())),
         )
 
 
@@ -297,7 +312,7 @@ class GenerationRequest:
                 for f in self.context_facts
             ],
             "context_path": self.context_path,
-            "sources": asdict(self.sources),
+            "sources": self.sources.to_dict(),
             "mutations": asdict(self.mutations),
             "policy": asdict(self.policy),
             "limits": asdict(self.limits),

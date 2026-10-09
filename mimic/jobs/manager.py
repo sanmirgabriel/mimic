@@ -12,6 +12,7 @@ from pathlib import Path
 
 from mimic.application import GenerationRequest, GenerationService
 from mimic.persistence import DataPaths, Repository
+from mimic.packs import PackRegistry, PackError
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,8 @@ class JobManager:
             raise ValueError("workers, preview_limit and count_batch must be positive")
         self.repository = repository
         self.paths = paths
-        self.service = service or GenerationService()
+        self.pack_registry = PackRegistry(paths)
+        self.service = service or GenerationService(self.pack_registry)
         self.workers = workers
         self.preview_limit = preview_limit
         self.count_batch = count_batch
@@ -93,6 +95,9 @@ class JobManager:
             # Round-trip immediately: callers may mutate GenerationRequest after submit.
             snapshot = json.loads(json.dumps(request.to_dict(), ensure_ascii=False))
             frozen = GenerationRequest.from_dict(snapshot)
+            if frozen.sources.packs:
+                frozen = GenerationService(self.pack_registry).freeze_packs(frozen)
+                snapshot = frozen.to_dict()
             if target_id is not None:
                 target = self.repository.target_domain(target_id)
                 if target is None:
@@ -246,7 +251,9 @@ class JobManager:
             logger.exception("generation failed for job %s", job_id)
             if self._is_managed_job_dir(job_id):
                 output.unlink(missing_ok=True)
-            if isinstance(exc, FileNotFoundError):
+            if isinstance(exc, PackError):
+                message = 'pack.error.' + exc.code
+            elif isinstance(exc, FileNotFoundError):
                 message = "source file not found"
             elif isinstance(exc, PermissionError):
                 message = "source file is not readable"

@@ -18,6 +18,7 @@ class DataPaths:
         self.root = Path(data_dir).expanduser().resolve()
         self.database = self.root / "mimic.db"
         self.jobs = self.root / "jobs"
+        self.packs = self.root / "packs"
 
     def job_dir(self, job_id: str) -> Path:
         parsed = UUID(job_id)

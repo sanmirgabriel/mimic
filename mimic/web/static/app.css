@@ -28,3 +28,7 @@ h1,h2,h3,p{margin-top:0}h1{font-size:clamp(25px,2.5vw,34px);line-height:1.25;fon
 .provenance details{margin:8px 0}.provenance code,.alert p{overflow-wrap:anywhere}.alert details{margin-top:8px}.alert details p{color:inherit;margin:8px 0 0}
 @media(max-width:700px){.panel-heading{flex-wrap:wrap}.panel-heading .text-link{white-space:normal;max-width:100%}.topbar{gap:12px}.topbar-actions{gap:8px;margin-left:auto}.locale-switch button{padding:5px 6px}.topbar-actions .button{white-space:nowrap}.crumb{flex:1 1 100%}}
 @media(max-width:380px){.topbar{padding:12px}.topbar-actions{gap:6px}.topbar-actions .button{padding:9px 10px;font-size:11px}.stats-grid{grid-template-columns:1fr}.mode-switch{flex-wrap:wrap}.mode-switch label{flex:1 1 100%}}
+
+/* Local pack metadata follows existing workspace tokens. */
+.pack-list,.pack-list article{min-width:0;overflow-wrap:anywhere}.pack-digest{overflow-wrap:anywhere;word-break:break-word}.pack-choice{margin:12px 0;align-items:flex-start}.pack-choice span{min-width:0;overflow-wrap:anywhere}.pack-choice small{display:block;color:var(--muted)}
+.pack-record{overflow-wrap:anywhere}.pack-record .panel-heading>div{min-width:0}
