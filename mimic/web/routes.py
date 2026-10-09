@@ -28,11 +28,12 @@ from mimic.application import (
 )
 from mimic.intelligence.builtins import SERVICE_PROFILES
 from mimic.ranking import BUDGET_PRESETS
+from mimic.packs import PackError, PackRegistry
 from mimic.domain.context import KeyValueContextExtractor
 from mimic.domain.models import Organization, Target
 from mimic.profile.schema import TargetProfile
 from mimic.persistence.repository import StorageConflict
-from mimic.web.uploads import UploadStore
+from mimic.web.uploads import UploadStore, MAX_UPLOAD_BYTES
 from mimic.web.security import BrowserHeaders, secure_headers
 from mimic.web.i18n import (LOCALES, LOCALE_COOKIE, TRANSLATIONS, Message, WebInputError,
                             plural, resolve_locale, safe_return_to, translate)
@@ -83,6 +84,8 @@ async def _call(operation, *args):
     # Both adapters share record operations and the existing repository/manager.
     try:
         return await run_in_threadpool(operation, *args)
+    except PackError:
+        raise
     except StorageConflict as exc:
         raise WebError(409, _message(409, str(exc))) from exc
     except LookupError as exc:
@@ -138,6 +141,8 @@ def mount_web(app: FastAPI) -> None:
     records = app.state.records
     repo = app.state.repository
     manager = app.state.job_manager
+    packs = PackRegistry(manager.paths)
+    generation_service = GenerationService(packs)
     csrf_token = secrets.token_urlsafe(32)
     uploads = UploadStore(app.state.job_manager.paths.root)
     app.state.web_uploads = uploads
@@ -163,6 +168,7 @@ def mount_web(app: FastAPI) -> None:
         if "title_key" in context:
             context["title"] = t(context.pop("title_key"))
         local = {"locale": locale, "t": t, "plural": partial(plural, locale),
+                 "job_error": lambda error: t(error) if error and error.startswith('pack.error.') and error in TRANSLATIONS[locale] else error,
                  "origin_label": partial(origin_label, locale), "score_label": partial(score_label, locale),
                  "step_label": lambda kind: t("step." + kind) if "step." + kind in TRANSLATIONS["en"] else kind,
                  "param_label": lambda key: t("param." + key) if "param." + key in TRANSLATIONS["en"] else key,
@@ -202,6 +208,11 @@ def mount_web(app: FastAPI) -> None:
         return render(request, "error.html", status=exc.status, title_key="error.title",
                       error=exc.message, error_status=exc.status)
 
+    @app.exception_handler(PackError)
+    async def pack_error(request: Request, exc: PackError):
+        return render(request, 'error.html', status=422, title_key='pack.title',
+                      error=Message('pack.error.' + exc.code), error_status=422)
+
     @app.exception_handler(HTTPException)
     async def http_error(request: Request, exc: HTTPException):
         if request.url.path.startswith("/api/"):
@@ -236,6 +247,61 @@ def mount_web(app: FastAPI) -> None:
         )
         return {"engagements": engagements, "organizations": organizations, "targets": targets}
 
+    async def packs_page(request, *, selected=None, verified=False, values=None, error=None, status=200):
+        return render(request, 'packs.html', status=status, title_key='pack.title', nav='packs',
+                      packs=await _call(packs.list), selected=selected, verified=verified,
+                      values=values or {}, error=error)
+
+    @app.get('/packs', include_in_schema=False)
+    async def pack_list(request: Request):
+        return await packs_page(request)
+
+    @app.get('/packs/{identity}', include_in_schema=False)
+    async def pack_detail(request: Request, identity: str):
+        return await packs_page(request, selected=await _call(packs.get, identity))
+
+    async def read_pack_form(request):
+        origin = request.headers.get('origin')
+        site = request.headers.get('sec-fetch-site')
+        # Firefox can suppress Origin under no-referrer, while retaining the
+        # same-origin Fetch Metadata signal. CSRF remains mandatory below.
+        same_origin_null = origin == 'null' and site == 'same-origin'
+        if site == 'cross-site' or (origin is not None and origin != str(request.base_url).rstrip('/') and not same_origin_null):
+            raise WebError(403, Message('error.csrf'))
+        return await read_form(request)
+
+    @app.post('/packs/import', include_in_schema=False)
+    async def pack_import(request: Request):
+        form = await read_pack_form(request)
+        values = {k: v for k, v in form.items() if isinstance(v, str)}
+        try:
+            upload = form.get('pack_file')
+            if not isinstance(upload, UploadFile) or not upload.filename:
+                raise PackError('file', 'Select a local text file')
+            metadata = await run_in_threadpool(packs.import_stream, upload.file,
+                id=values.get('id'), version=values.get('version'), kind=values.get('kind'),
+                filename=upload.filename, name=values.get('name') or None,
+                description=values.get('description', ''), language=values.get('language') or 'und',
+                license=values.get('license') or 'NOASSERTION', source_url=values.get('source_url') or None,
+                attribution=values.get('attribution') or translate(resolve_locale(request.cookies.get(LOCALE_COOKIE)), 'pack.local_attribution'),
+                max_bytes=MAX_UPLOAD_BYTES)
+            return RedirectResponse('/packs/' + metadata.identity, status_code=303)
+        except PackError as exc:
+            return await packs_page(request, values=values, error=Message('pack.error.' + exc.code), status=422)
+        except OSError:
+            return await packs_page(request, values=values, error=Message('error.source_io'), status=422)
+        finally:
+            await form.close()
+
+    @app.post('/packs/{identity}/verify', include_in_schema=False)
+    async def pack_verify(request: Request, identity: str):
+        form = await read_pack_form(request)
+        try:
+            metadata = await _call(packs.verify, identity)
+            return await packs_page(request, selected=metadata, verified=True)
+        finally:
+            await form.close()
+
     @app.get("/", include_in_schema=False)
     async def dashboard(request: Request):
         data = await choices(request)
@@ -249,7 +315,7 @@ def mount_web(app: FastAPI) -> None:
             defaults.update({key: "on" for key in ("intelligence_enabled", "common_numbers", "recent_years", "corporate_roles")})
         return render(request, "generate.html", status=status, title_key="generation.new", nav="generate",
                       values={**defaults, **(values or {})}, error=error, summary=summary,
-                      warnings=warnings, **await choices(request))
+                      warnings=warnings, packs=await _call(packs.list), **await choices(request))
 
     @app.get("/generate", include_in_schema=False)
     async def generation_form(request: Request, target_id: UUID | None = None, organization_id: UUID | None = None):
@@ -348,6 +414,11 @@ def mount_web(app: FastAPI) -> None:
                                    sources=SourceOptions(dataset_paths=(source_paths["dataset"],) if "dataset" in source_paths else (),
                                                          ready_candidate_paths=(source_paths["ready"],) if "ready" in source_paths else (),
                                                          include_ptbr=values.get("include_ptbr") == "on"))
+        selected_packs = form.getlist('packs')
+        if len(selected_packs) > 64:
+            raise PackError('snapshot', 'Too many selected packs')
+        from dataclasses import replace
+        result.sources = replace(result.sources, packs=tuple([await _call(packs.reference, identity) for identity in selected_packs]))
         result.validate()
         values["reference_year"] = str(result.intelligence.reference_year or "")
         return result, target_id
@@ -357,9 +428,10 @@ def mount_web(app: FastAPI) -> None:
         form = await read_form(request)
         values = {key: value for key, value in form.items() if isinstance(value, str)}
         values["selected_services"] = list(form.getlist("service_profiles"))
+        values['selected_packs'] = list(form.getlist('packs'))
         try:
             generation, target_id = await generation_input(request, form, values)
-            prepared = await run_in_threadpool(GenerationService().prepare, generation)
+            prepared = await run_in_threadpool(generation_service.prepare, generation)
             summary = prepared.summary().to_dict()
             if not (summary["target_seed_count"] or summary["organization_seed_count"] or summary["context_fact_count"]
                     or summary["ptbr_enabled"] or summary["dataset_source_count"] or summary["ready_candidate_source_count"]
@@ -371,7 +443,8 @@ def mount_web(app: FastAPI) -> None:
             return RedirectResponse(f"/jobs/{job['id']}", status_code=303)
         except (ValueError, TypeError, ApplicationError, WebError) as exc:
             status = exc.status if isinstance(exc, WebError) else 422
-            error = exc.message if isinstance(exc, (WebError, WebInputError)) else Message("error.invalid", detail=str(exc))
+            error = (Message('pack.error.' + exc.code) if isinstance(exc, PackError) else
+                     exc.message if isinstance(exc, (WebError, WebInputError)) else Message("error.invalid", detail=str(exc)))
             if isinstance(exc, UnicodeError) or isinstance(exc.__cause__, UnicodeError):
                 error = Message("error.utf8")
             return await generation_page(request, values, error=error, status=status)
@@ -400,7 +473,7 @@ def mount_web(app: FastAPI) -> None:
         summary, warnings = None, ()
         try:
             generation = GenerationRequest.from_dict(job["request"])
-            prepared = await run_in_threadpool(GenerationService().prepare, generation)
+            prepared = await run_in_threadpool(generation_service.prepare, generation)
             summary, warnings = prepared.summary().to_dict(), prepared.warnings
             # Historical job scores use their persisted model, even after a future upgrade.
             if summary["ranking"]["enabled"]:

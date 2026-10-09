@@ -8,6 +8,8 @@ import logging
 import sys
 from collections.abc import Iterator
 from pathlib import Path
+import os
+import tempfile
 
 from mimic.application import (
     ApplicationError,
@@ -32,6 +34,8 @@ from mimic.profile.loader import build_plan, load_profile_file
 from mimic.profile.schema import TargetProfile
 from mimic.rules.hashcat import export_rules
 from mimic.ui.banner import print_banner
+from mimic.packs import PackRegistry
+from mimic.packs.registry import MAX_IMPORT_BYTES
 
 logger = logging.getLogger("mimic")
 
@@ -64,6 +68,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--context", help="Deterministic field:value context file.")
     p.add_argument("--dataset", action="append", default=[], help="Local seed corpus (repeatable).")
     p.add_argument("--candidates", action="append", default=[], help="Ready candidates file (repeatable).")
+    p.add_argument('--pack', action='append', default=[], metavar='ID@VERSION', help='Local digest-pinned pack (repeatable).')
+    p.add_argument('--data-dir', help='MIMIC data directory used to resolve local packs.')
     p.add_argument("--max-dataset-lines", type=int, default=DEFAULT_MAX_LINES)
     p.add_argument("--ptbr", action="store_true", help="Include small built-in PT-BR seed sets.")
     p.add_argument(
@@ -182,6 +188,8 @@ def main(argv: list[str] | None = None) -> int:
         Exit code: 0 success, 1 input error, 2 I/O error.
     """
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == 'packs':
+        return _packs_command(argv[1:])
     if argv and argv[0] == "serve":
         serve_parser = argparse.ArgumentParser(prog="mimic serve")
         serve_parser.add_argument("--host", default="127.0.0.1")
@@ -234,7 +242,7 @@ def main(argv: list[str] | None = None) -> int:
             names = _read_lines(args.names)
         elif not (args.profile or args.export_rules or args.name or args.context
                   or args.dataset or args.candidates or args.ptbr or args.birth_date
-                  or args.team or args.pet or args.company or args.organization or args.service):
+                  or args.team or args.pet or args.company or args.organization or args.service or args.pack):
             names = [
                 line.strip()
                 for line in sys.stdin
@@ -318,7 +326,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     if not args.export_rules and not (names or has_profile_seed or has_inline_seed
                                      or args.context or args.dataset or args.candidates or args.ptbr
-                                     or args.organization or args.service):
+                                     or args.organization or args.service or args.pack):
         logger.error("No names provided.")
         return 1
 
@@ -343,6 +351,13 @@ def main(argv: list[str] | None = None) -> int:
             logger.error("Invalid profile for rule export: %s", exc)
             return 1
 
+    registry = PackRegistry(args.data_dir)
+    try:
+        packs = tuple(registry.reference(identity) for identity in args.pack)
+        SourceOptions(packs=packs)
+    except (ValueError, OSError) as exc:
+        logger.error('Cannot resolve pack: %s', exc)
+        return 1
     request = GenerationRequest(
         ranking=args.budget,
         target=Target(profile.nome or "", profile) if profile is not None else None,
@@ -359,6 +374,7 @@ def main(argv: list[str] | None = None) -> int:
             dataset_paths=tuple(args.dataset),
             ready_candidate_paths=tuple(args.candidates),
             include_ptbr=args.ptbr,
+            packs=packs,
         ),
         mutations=MutationOptions(
             leet_mode=args.leet, combine=args.combine, separators=args.separators,
@@ -374,11 +390,20 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     try:
-        prepared = GenerationService().prepare(request)
-    except ApplicationError as exc:
+        prepared = GenerationService(registry).prepare(request)
+    except (ApplicationError, ValueError, OSError) as exc:
         logger.error("Invalid generation configuration: %s", exc)
         return 1
-    sink = Sink(output_path=args.output)
+    # Pack executions publish a file only after every source has finished intact.
+    staged_output = None
+    if packs and args.output:
+        try:
+            descriptor, staged_output = tempfile.mkstemp(prefix='.mimic-', suffix='.part', dir=Path(args.output).absolute().parent)
+            os.close(descriptor)
+        except OSError as exc:
+            logger.error('Cannot stage pack output: %s', exc)
+            return 2
+    sink = Sink(output_path=staged_output or args.output)
 
     if args.debug:
         values = (_trace_results(prepared.iter_results()) if request.ranking.enabled
@@ -388,6 +413,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         count = sink.drain(values)
+        if staged_output:
+            os.replace(staged_output, args.output)
         logger.info("Generated %d candidates.", count)
     except (OSError, UnicodeError) as exc:
         logger.error("I/O error during output: %s", exc)
@@ -395,8 +422,63 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         logger.error("Invalid dataset: %s", exc)
         return 1
+    finally:
+        if staged_output:
+            Path(staged_output).unlink(missing_ok=True)
 
     return 0
+
+
+def _packs_command(argv):
+    parser = argparse.ArgumentParser(prog='mimic packs')
+    commands = parser.add_subparsers(dest='command', required=True)
+    for command in ('list', 'show', 'import', 'verify'):
+        child = commands.add_parser(command)
+        child.add_argument('--data-dir', help='MIMIC data directory.')
+        if command in ('show', 'verify'):
+            child.add_argument('identity', metavar='ID@VERSION')
+        if command == 'import':
+            child.add_argument('path')
+            child.add_argument('--id', required=True)
+            child.add_argument('--version', required=True)
+            child.add_argument('--kind', choices=('seed', 'ready'), required=True)
+            child.add_argument('--name')
+            child.add_argument('--description', default='')
+            child.add_argument('--language', default='und')
+            child.add_argument('--license', default='NOASSERTION')
+            child.add_argument('--source-url')
+            child.add_argument('--attribution')
+            child.add_argument('--max-bytes', type=int, default=MAX_IMPORT_BYTES,
+                               help='Import size ceiling in bytes (maximum 1 GiB).')
+    args = parser.parse_args(argv)
+    registry = PackRegistry(args.data_dir)
+    try:
+        if args.command == 'list':
+            entries = registry.list()
+            if not entries:
+                print('No packs installed.')
+            for pack in entries:
+                print(f'{pack.identity}\t{pack.kind}\t{pack.language}\t{pack.license}\t{pack.name}')
+            if any(pack.license == 'NOASSERTION' for pack in entries):
+                print('License unverified. Check the source terms before redistribution.', file=sys.stderr)
+            return 0
+        if args.command == 'import':
+            pack = registry.import_file(args.path, id=args.id, version=args.version, kind=args.kind,
+                name=args.name, description=args.description, language=args.language, license=args.license,
+                source_url=args.source_url, attribution=args.attribution, max_bytes=args.max_bytes)
+            print(f'Imported {pack.identity}')
+        elif args.command == 'verify':
+            pack = registry.verify(args.identity)
+            print(f'Verified {pack.identity} SHA-256 {pack.sha256}')
+        else:
+            pack = registry.get(args.identity)
+            print(json.dumps(pack.to_dict(), ensure_ascii=False, indent=2))
+        if pack.license == 'NOASSERTION':
+            print('License unverified. Check the source terms before redistribution.', file=sys.stderr)
+        return 0
+    except (ValueError, OSError) as exc:
+        print(f'Pack error: {exc}', file=sys.stderr)
+        return 1
 
 
 def _inspect_profile(path: str) -> int:
