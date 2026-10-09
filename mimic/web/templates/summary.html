@@ -19,3 +19,5 @@
 <div class="summary-section"><h3>{{ t('summary.limits') }}</h3><p class="muted">{{ t('summary.per_word', count='{:,}'.format(summary.limits.max_candidates_per_word)) }}<br>{{ t('summary.dataset_lines', count='{:,}'.format(summary.limits.max_dataset_lines)) }}</p></div><p class="caption">{{ t('summary.lazy') }}</p>
 {% set selected_packs = summary.packs %}{% include 'pack_summary.html' %}
 {% endif %}
+
+{% if summary and summary.get('common_password_count') %}<div class="summary-section"><h3>{{ t('catalog.common_passwords') }}</h3><p>{{ t('catalog.common_count', count=summary.common_password_count) }}</p><small>{{ summary.common_passwords_version }}</small></div>{% endif %}

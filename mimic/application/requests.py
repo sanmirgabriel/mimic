@@ -100,6 +100,8 @@ class SourceOptions:
     ready_candidate_paths: tuple[str, ...] = ()
     include_ptbr: bool = False
     packs: tuple[PackReference, ...] = ()
+    include_common_passwords: bool = False
+    common_passwords_version: str | None = None
 
     def __post_init__(self) -> None:
         for name, paths in (("dataset_paths", self.dataset_paths),
@@ -116,11 +118,25 @@ class SourceOptions:
         if len({pack.identity for pack in self.packs}) != len(self.packs):
             raise PackError('snapshot', "duplicate pack selections")
         object.__setattr__(self, "packs", tuple(self.packs))
+        if type(self.include_common_passwords) is not bool:
+            raise ValueError("include_common_passwords must be a boolean")
+        if self.include_common_passwords:
+            from mimic.intelligence.catalog import COMMON_PASSWORDS_VERSION, common_vocabulary
+            version = self.common_passwords_version
+            if version is None:
+                version = COMMON_PASSWORDS_VERSION
+            common_vocabulary(version)
+            object.__setattr__(self, "common_passwords_version", version)
+        elif self.common_passwords_version is not None:
+            raise ValueError("common_passwords_version requires include_common_passwords")
 
     def to_dict(self):
         data = asdict(self)
         if not self.packs:
             del data['packs']  # Preserve the JSON contract of requests without packs.
+        if not self.include_common_passwords:
+            del data['include_common_passwords']
+            del data['common_passwords_version']
         return data
 
     @classmethod
@@ -130,6 +146,8 @@ class SourceOptions:
             ready_candidate_paths=data.get("ready_candidate_paths", ()),
             include_ptbr=data.get("include_ptbr", False),
             packs=tuple(PackReference.from_dict(p) for p in data.get('packs', ())),
+            include_common_passwords=data.get('include_common_passwords', False),
+            common_passwords_version=data.get('common_passwords_version'),
         )
 
 

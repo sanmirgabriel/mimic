@@ -32,6 +32,7 @@ from mimic.domain.planning import BehaviorPattern, PreparedGeneration as Planned
 from mimic.domain.planning import prepare_generation
 from mimic.intelligence.builtins import KNOWLEDGE_VERSION
 from mimic.intelligence.planning import IntelligencePlan, plan_intelligence
+from mimic.intelligence.catalog import common_vocabulary
 from mimic.ranking import GenerationResult, RankingOptions, SCORE_VERSION
 from mimic.ranking.scoring import score_candidate
 from mimic.ranking.topk import select_top_k
@@ -80,6 +81,8 @@ class GenerationPlanSummary:
     ranking_preset: str
     score_version: str | None
     packs: tuple = ()
+    common_password_count: int = 0
+    common_passwords_version: str | None = None
 
     def to_dict(self) -> dict:
         from dataclasses import asdict
@@ -88,6 +91,9 @@ class GenerationPlanSummary:
         data["mutators"] = list(self.mutators)
         if not self.packs:
             del data['packs']
+        if not self.common_password_count:
+            del data['common_password_count']
+            del data['common_passwords_version']
         return data
 
 
@@ -209,7 +215,7 @@ class GenerationService:
         intelligence = request.intelligence
         if intelligence.enabled and not (has_context or intelligence.service_profiles
                 or request.sources.dataset_paths or request.sources.ready_candidate_paths or request.sources.include_ptbr
-                or request.sources.packs):
+                or request.sources.packs or request.sources.include_common_passwords):
             raise InvalidGenerationRequest("intelligence requires a contextual seed or service profile")
         # Service-only requests use only the selected profiles' vocabulary.
         # Configured corpora without context receive numeric primitives only.
@@ -235,7 +241,7 @@ class GenerationService:
                 context_facts=facts,
                 extra_seeds=extra,
                 extra_number_candidates=knowledge.numbers,
-                defer_extra_numbers=bool((request.sources.ready_candidate_paths or
+                defer_extra_numbers=bool((request.sources.ready_candidate_paths or request.sources.include_common_passwords or
                     any(pack.metadata.kind == 'ready' for pack in request.sources.packs)) and knowledge.numbers),
             )
             summary = self._summary(request, facts, planned, knowledge)
@@ -324,12 +330,18 @@ class GenerationService:
             for reference in request.sources.packs:
                 if reference.metadata.kind == kind:
                     yield from PackRegistry.seeds(*pack_streams[reference.identity])
+        def common_passwords():
+            if request.sources.include_common_passwords:
+                for value in common_vocabulary(request.sources.common_passwords_version).passwords:
+                    yield Seed(Candidate(value, (Origin("knowledge", "common_password", value),)),
+                               mutable=False, combinable=False)
         return chain(
             *(
                 stream_dataset(path, ready=True, max_lines=limit)
                 for path in request.sources.ready_candidate_paths
             ),
             packs('ready'),
+            common_passwords(),
             knowledge.seeds,
             *(
                 stream_dataset(path, max_lines=limit)
@@ -381,6 +393,9 @@ class GenerationService:
             service_derived_seed_count=sum(any(origin.source == "knowledge" and origin.field.startswith("service.")
                                           for origin in seed.candidate.origins) for seed in knowledge.seeds),
             packs=tuple(p.metadata for p in request.sources.packs),
+            common_password_count=(len(common_vocabulary(request.sources.common_passwords_version).passwords)
+                                   if request.sources.include_common_passwords else 0),
+            common_passwords_version=request.sources.common_passwords_version,
         )
 
     def _warnings(

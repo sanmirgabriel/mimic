@@ -12,6 +12,8 @@ SERVICE_PROFILES = (
     ServiceProfile("postgresql", "PostgreSQL", ("postgresql", "postgres", "db"), ("postgres", "dba"), KNOWLEDGE_VERSION),
     ServiceProfile("mssql", "Microsoft SQL Server", ("mssql", "sql", "db"), ("sa", "dba"), KNOWLEDGE_VERSION),
     ServiceProfile("windows-ad", "Windows / Active Directory", ("windows", "AD"), ("administrator", "svc"), KNOWLEDGE_VERSION),
+    ServiceProfile("grafana", "Grafana", ("grafana",), ("admin", "viewer"), KNOWLEDGE_VERSION),
+    ServiceProfile("rabbitmq", "RabbitMQ", ("rabbitmq", "amqp"), ("guest",), KNOWLEDGE_VERSION),
 )
 
 
