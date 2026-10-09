@@ -29,6 +29,7 @@ from mimic.domain.context import ExtractedFact, load_context
 from mimic.domain.datasets import DEFAULT_MAX_LINES
 from mimic.domain.models import Organization, Target
 from mimic.intelligence.builtins import SERVICE_PROFILES
+from mimic.intelligence import catalog
 from mimic import __version__
 from mimic.profile.loader import build_plan, load_profile_file
 from mimic.profile.schema import TargetProfile
@@ -72,6 +73,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument('--data-dir', help='MIMIC data directory used to resolve local packs.')
     p.add_argument("--max-dataset-lines", type=int, default=DEFAULT_MAX_LINES)
     p.add_argument("--ptbr", action="store_true", help="Include small built-in PT-BR seed sets.")
+    p.add_argument("--include-common-passwords", action="store_true",
+                   help="Opt in to independent common weak passwords as ready, non-combinable candidates.")
     p.add_argument(
         "--numbers",
         metavar="FILE",
@@ -188,6 +191,8 @@ def main(argv: list[str] | None = None) -> int:
         Exit code: 0 success, 1 input error, 2 I/O error.
     """
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] in ("services", "credentials"):
+        return _catalog_command(argv[0], argv[1:])
     if argv and argv[0] == 'packs':
         return _packs_command(argv[1:])
     if argv and argv[0] == "serve":
@@ -242,7 +247,8 @@ def main(argv: list[str] | None = None) -> int:
             names = _read_lines(args.names)
         elif not (args.profile or args.export_rules or args.name or args.context
                   or args.dataset or args.candidates or args.ptbr or args.birth_date
-                  or args.team or args.pet or args.company or args.organization or args.service or args.pack):
+                  or args.team or args.pet or args.company or args.organization or args.service or args.pack
+                  or args.include_common_passwords):
             names = [
                 line.strip()
                 for line in sys.stdin
@@ -326,7 +332,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     if not args.export_rules and not (names or has_profile_seed or has_inline_seed
                                      or args.context or args.dataset or args.candidates or args.ptbr
-                                     or args.organization or args.service or args.pack):
+                                     or args.organization or args.service or args.pack or args.include_common_passwords):
         logger.error("No names provided.")
         return 1
 
@@ -374,6 +380,7 @@ def main(argv: list[str] | None = None) -> int:
             dataset_paths=tuple(args.dataset),
             ready_candidate_paths=tuple(args.candidates),
             include_ptbr=args.ptbr,
+            include_common_passwords=args.include_common_passwords,
             packs=packs,
         ),
         mutations=MutationOptions(
@@ -527,6 +534,90 @@ def _trace(candidates: Iterator[Candidate]) -> Iterator[str]:
         )
         logger.debug("%s <- %s | %s", candidate.value, origins or "no origin supplied", steps)
         yield candidate.value
+
+
+def _catalog_command(kind: str, argv: list[str]) -> int:
+    """Read-only catalog adapters; common values never become associated pairs."""
+    parser = argparse.ArgumentParser(prog=f"mimic {kind}")
+    commands = parser.add_subparsers(dest="command", required=True)
+    listing = commands.add_parser("list")
+    if kind == "services":
+        listing.add_argument("--search", default="")
+        showing = commands.add_parser("show")
+        showing.add_argument("service")
+    else:
+        exporting = commands.add_parser("export")
+        for subparser in (listing, exporting):
+            subparser.add_argument("--service", choices=[s.id for s in catalog.SERVICES])
+            subparser.add_argument("--category", choices=("documented", "common"), default="documented")
+        exporting.add_argument("--format", choices=("csv",), default="csv")
+        exporting.add_argument("--output", "-o", required=True)
+    args = parser.parse_args(argv)
+    try:
+        if kind == "services":
+            if args.command == "list":
+                print("ID\tService\tDocumented defaults")
+                for service in catalog.list_services(args.search):
+                    print(f"{service.id}\t{service.display_name}\t{len(catalog.list_credentials(service.id))}")
+            else:
+                service = catalog.get_service(args.service)
+                profile = next(p for p in SERVICE_PROFILES if p.id == service.id)
+                print(f"{service.display_name} ({service.id})")
+                print(service.description)
+                print("Aliases: " + ", ".join(service.aliases))
+                print("Contextual tokens: " + ", ".join(profile.tokens))
+                print("Conventional accounts/roles (not credential pairs): " + ", ".join(profile.roles))
+                print(f"Documented defaults: {len(catalog.list_credentials(service.id))}")
+                print("Authentication notes: " + service.authentication_notes)
+                print("Catalog version: " + service.catalog_version)
+                for title, url in service.references:
+                    print(f"Source: {title} — {url}")
+            return 0
+        if args.category == "common" and args.service:
+            raise ValueError("common values are global; --service cannot be combined with --category common")
+        if args.command == "export":
+            content = catalog.common_csv() if args.category == "common" else catalog.credentials_csv(args.service)
+            # Publish only complete data; link() atomically refuses an existing
+            # destination (including symlinks), even if it appeared during writing.
+            descriptor, staged = tempfile.mkstemp(prefix='.mimic-catalog-', suffix='.part',
+                                                  dir=Path(args.output).absolute().parent)
+            try:
+                with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as output:
+                    output.write(content)
+                    output.flush()
+                    os.fsync(output.fileno())
+                os.link(staged, args.output)
+            finally:
+                Path(staged).unlink()
+            print(f"Exported {args.category} catalog to {args.output}")
+            return 0
+        if args.category == "common":
+            vocabulary = catalog.common_vocabulary()
+            print("Common weak values (common_value)")
+            print(vocabulary.description)
+            print(f"Collection: {vocabulary.id} / {vocabulary.version}")
+            print("Common usernames:\n" + "\n".join(vocabulary.usernames))
+            print("Common weak passwords:\n" + "\n".join(vocabulary.passwords))
+            return 0
+        credentials = catalog.list_credentials(args.service)
+        if not credentials:
+            print("No documented default credentials in this catalog for this service.")
+        for credential in credentials:
+            print(f"{catalog.get_service(credential.service_id).display_name}: {credential.username} / {credential.password} ({credential.type})")
+            print("Source: " + credential.source_title + " — " + credential.source_url)
+            print("Applicability: " + credential.applicability)
+            for restriction in credential.restrictions:
+                print("Restriction: " + restriction)
+            if credential.version_scope:
+                print("Version scope: " + credential.version_scope)
+            print(f"Catalog: {credential.catalog_version}; record: {credential.record_version}")
+        return 0
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    except OSError as exc:
+        print(f"Cannot export catalog: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

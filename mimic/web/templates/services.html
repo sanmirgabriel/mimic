@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="page-heading"><div><p class="eyebrow">{{ t('catalog.eyebrow') }}</p><h1>{{ t('catalog.title') }}</h1><p>{{ t('catalog.description') }}</p></div><span class="workspace-label">{{ t('catalog.offline') }}</span></section>
+<div class="tags catalog-tabs"><a class="tag" href="/services" {% if category == 'services' %}aria-current="page"{% endif %}>{{ t('catalog.services') }}</a><a class="tag" href="/services?category=common" {% if category == 'common' %}aria-current="page"{% endif %}>{{ t('catalog.common') }}</a></div>
+{% if category == 'services' %}
+<div class="catalog-grid">
+<section class="panel catalog-list" aria-labelledby="services-heading">
+<div class="panel-heading"><h2 id="services-heading">{{ t('catalog.services') }}</h2></div>
+<form class="catalog-search" method="get" action="/services"><div class="field"><label for="service-search">{{ t('catalog.search') }}</label><input id="service-search" name="q" value="{{ query }}" maxlength="200" type="search"></div><button class="button secondary" type="submit">{{ t('catalog.search_action') }}</button></form>
+<ul class="catalog-service-list">{% for service in services %}<li><a href="/services/{{ service.id }}" {% if selected_service and service.id == selected_service.id %}aria-current="page"{% endif %}>{{ service.display_name }}</a><small>{{ t('catalog.service.' + service.id + '.description') }}</small></li>{% else %}<li>{{ t('catalog.no_services') }}</li>{% endfor %}</ul>
+</section>
+{% if selected_service %}
+<section class="panel catalog-detail" aria-labelledby="service-heading">
+<div class="panel-heading"><div><h2 id="service-heading">{{ selected_service.display_name }}</h2><p>{{ t('catalog.service.' + selected_service.id + '.description') }}</p></div><a class="button primary" href="/generate?service={{ selected_service.id }}">{{ t('catalog.generate', service=selected_service.display_name) }}</a></div>
+<div class="catalog-body">
+<dl class="catalog-metadata"><dt>{{ t('catalog.aliases') }}</dt><dd>{{ selected_service.aliases|join(', ') }}</dd><dt>{{ t('catalog.tokens') }}</dt><dd>{{ selected_profile.tokens|join(', ') }}</dd><dt>{{ t('catalog.accounts') }}</dt><dd>{{ selected_profile.roles|join(', ') }}</dd><dt>{{ t('catalog.version') }}</dt><dd>{{ selected_service.catalog_version }}</dd></dl>
+<h3>{{ t('catalog.authentication') }}</h3><p>{{ t('catalog.service.' + selected_service.id + '.auth') }}</p>
+<h3>{{ t('catalog.references') }}</h3><ul class="catalog-references">{% for title, url in selected_service.references %}<li><a href="{{ url }}" rel="noreferrer">{{ t('catalog.service.' + selected_service.id + '.source.' + loop.index|string) }}</a><small>{{ url }}</small></li>{% endfor %}</ul>
+<h3>{{ t('catalog.documented') }}</h3><span class="catalog-kind catalog-documented" data-category="documented_default">{{ t('catalog.documented_badge') }}</span><p>{{ t('catalog.documented_help') }}</p>
+{% if credentials %}
+<div class="table-wrap catalog-credentials"><table><caption class="sr-only">{{ t('catalog.documented') }} · {{ selected_service.display_name }}</caption><thead><tr><th scope="col">{{ t('catalog.username') }}</th><th scope="col">{{ t('catalog.password') }}</th><th scope="col">{{ t('catalog.evidence') }}</th></tr></thead><tbody>{% for credential in credentials %}<tr><td><code>{{ credential.username }}</code></td><td><code>{{ credential.password }}</code></td><td><strong>{{ t('catalog.applicability') }}</strong><p>{{ t('catalog.credential.' + credential.id + '.applicability') }}</p><ul>{% for restriction in credential.restrictions %}<li>{{ t('catalog.credential.' + credential.id + '.restriction.' + loop.index|string) }}</li>{% endfor %}</ul><a href="{{ credential.source_url }}" rel="noreferrer">{{ t('catalog.source') }} · {{ t('catalog.service.' + selected_service.id + '.source.1') }}</a><small class="row-sub">{{ credential.source_url }}</small>{% if credential.version_scope %}<small>{{ t('catalog.version_scope') }}: {{ credential.version_scope }}</small>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}<p class="catalog-empty">{{ t('catalog.no_defaults') }}</p>{% endif %}
+<div class="catalog-hypothesis"><span class="catalog-kind catalog-generated" data-category="generated_candidate">{{ t('catalog.generated') }}</span><p>{{ t('catalog.generated_help') }}</p><a class="text-link" href="/generate?service={{ selected_service.id }}">{{ t('catalog.generate', service=selected_service.display_name) }} →</a></div>
+</div></section>
+{% else %}<section class="panel catalog-detail"><div class="catalog-body"><h2>{{ t('catalog.choose') }}</h2><p>{{ t('catalog.choose_help') }}</p></div></section>{% endif %}
+</div>
+{% endif %}
+<section class="panel catalog-common" id="common" aria-labelledby="common-heading"><div class="panel-heading"><div><h2 id="common-heading">{{ t('catalog.common') }}</h2><span class="catalog-kind catalog-common-value" data-category="common_value">{{ t('catalog.common_badge') }}</span></div><small>{{ common.id }} · {{ common.version }}</small></div><div class="catalog-body"><p>{{ t('catalog.common_help') }}</p><div class="two-columns"><section><h3>{{ t('catalog.common_usernames') }}</h3><p>{{ t('catalog.username_help') }}</p><ul class="catalog-values">{% for value in common.usernames %}<li><code>{{ value }}</code></li>{% endfor %}</ul></section><section><h3>{{ t('catalog.common_passwords') }}</h3><p>{{ t('catalog.password_help') }}</p><ul class="catalog-values">{% for value in common.passwords %}<li><code>{{ value }}</code></li>{% endfor %}</ul></section></div><p>{{ t('catalog.export_help') }}</p></div></section>
+{% endblock %}

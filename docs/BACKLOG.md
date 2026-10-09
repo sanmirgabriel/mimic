@@ -1,8 +1,8 @@
 # MIMIC product backlog
 
-Canonical product epics. Blocks 7, 8, 8.4 and 8.5 are merged. Block 9 is implemented
-and Gate 9 audited in the working tree, pending approval before completion/commit.
-Block 10 is the next major product milestone.
+Canonical product epics. Blocks 7, 8, 8.4, 8.5 and 9 are merged. The Block 9 CI
+performance fix is merged in PR #12. Block 10 is implemented, pending approval
+at Gate 10. The next major product milestone is Block 11.
 
 | Block | Epic | Scope |
 | --- | --- | --- |
@@ -10,8 +10,8 @@ Block 10 is the next major product milestone.
 | 8 | Scoring / Ranking / Budgets ✅ | Explainable prioritization and explicit generation budgets. |
 | 8.4 | Partial-Leet Coverage Fix ✅ | Original candidate first, then up to max_subs replacements; causal provenance, ranking, caps and compatibility validated. |
 | 8.5 | Web Internationalization + Theme Switcher ✅ | PT-BR default and selectable EN; compact language/theme controls, dark/light palettes and local preferences; presentation only. |
-| 9 | Dataset & Knowledge Packs (approval pending) | Local versioned UTF-8 packs, digest-pinned snapshots, attribution, streaming Seed/Ready sources and CLI/Web management; Gate 9 audited. |
-| 10 | Service Intelligence + Default Credential Catalog | Next major block: broader technology context; separately modeled credential pairs. |
+| 9 | Dataset & Knowledge Packs ✅ | Local versioned UTF-8 packs, digest-pinned snapshots, attribution, streaming Seed/Ready sources and CLI/Web management; Gate 9 audited. |
+| 10 | Service Intelligence + Default Credential Catalog (Gate 10 approval pending) | Implemented: seven service profiles, passive documented pairs, independent common values and explicit ready-password opt-in. |
 | 11 | Observed Password Pattern Learning | Authorized observations and attributable learned patterns. |
 | 12 | Password Popularity / Frequency | Frequency knowledge with transparent sources and licensing. |
 | 13 | Hashcat Convergence | Consistent material and rule export through the existing engine. |
@@ -125,7 +125,66 @@ Block 10 is the next major product milestone.
   the ADR proposes a future import-time line ceiling after compatibility review.
 - Gate recommendation: ready for commit review. Product completion remains
   pending approval; no commit, push or merge has been performed.
-- **Next major block: Block 10 — Service Intelligence + Default Credential Catalog.**
+- Follow-up Block 10 is implemented below, pending Gate 10 approval.
+
+## Block 10 — Service Intelligence + Default Credential Catalog (implemented; Gate 10 approval pending)
+
+- Frozen, packaged service knowledge and a shared local lookup/export catalog.
+  Documented credential pairs, common independent values and generated hypotheses
+  remain separate. Only Grafana admin/admin and RabbitMQ guest/guest are included
+  as documented defaults, with official sources and installation restrictions.
+  PostgreSQL/WordPress have explicit authentication notes and no universal pair.
+- Existing five profiles retain their tokens, roles, order and knowledge-v1.
+  Grafana/RabbitMQ append real contextual vocabulary to the existing bounded
+  intelligence planning and single Generator. Service-only and organization +
+  service flows retain causal service identity, caps, policy and budgets.
+- Six common usernames are read-only references. Six independent weak passwords
+  enter generation only through an explicit CLI/Web/request option as ready,
+  noncombinable Seeds, with knowledge.common_password provenance. Disabled old
+  requests and summaries retain their JSON shape; enabled Job snapshots pin the
+  common-v1 collection. No new score weight, Cartesian product or mutation path.
+- CLI offers services list/show and credentials list/export, with separate CSV
+  schemas for documented pairs and common values. Export retains conditions,
+  uses CSV/formula safeguards and preserves existing destination files.
+- SSR /services provides search, technology details, sources and distinct badges;
+  /generate?service=ID preselects the existing form without starting generation.
+  PT-BR/EN metadata and notes, dark/light semantic tokens and mobile table overflow
+  use existing locale, CSP, CSRF, HTMX and theme behavior. No frontend dependency.
+- No new API endpoints, database/migration, active authentication, downloads,
+  scraping, frequency scoring or second engine. README, Core, mutators,
+  intelligence/domain planning and score-v1 remain unchanged.
+- Baseline: **933 passed** at 3d75a239 in 46.59 seconds wall time. Final full
+  suite: **994 passed** in 47.79 seconds wall time (47.18 pytest seconds), with
+  all 933 original test nodes retained and 61 new cases; new IDs stay short.
+  All 16 comparisons against the base preserve output bytes, order, provenance,
+  scores/ranks and counts, including ACME + WordPress at 159175 evaluated.
+  New generation paths match across hash seeds 1/42/777.
+- Wheel/sdist include the catalog and Web assets. The wheel installed outside
+  the checkout passes CLI/server smoke checks and pip check. Firefox validates
+  96 page/locale/theme/width combinations at 375/768/1440px, search, preview,
+  completed Job/download and keyboard focus; 168 badge contrast samples have
+  a minimum ratio of 6.36:1. CI workflow/matrix remain unchanged; these are local
+  validation results, not a remote CI run.
+  See [ADR 0010](adr/0010-service-intelligence-default-credentials.md).
+- **Implemented; pending approval at Gate 10. No commit, push or merge.**
+- Gate 10 pre-commit audit (2026-10-09): initial **994 passed** in 72.99 seconds
+  wall time; after 50 audit/regression cases, final **1044 passed** in 57.41
+  seconds wall time (56.74 pytest seconds). All 933 base nodes remain present;
+  the longest new test ID is 111 characters. Local timings vary with system load.
+- Gate fixes: reject malformed HTTPS hosts/ports, empty userinfo, C1 controls,
+  Unicode line separators, oversized metadata and invalid version syntax;
+  CSV publication now stages, flushes/syncs and atomically refuses existing
+  destinations, cleaning up on
+  write/publication failure. Empty-state wording is explicitly scoped to this
+  catalog. The ADR clarifies exact values, spreadsheet representation and the
+  version-ID contract (no request content digest for these built-ins).
+- Gate evidence: all 16 comparisons against the required base still match;
+  seven new determinism scenarios compare full result metadata across seeds
+  1/42/777. Fresh wheel/sdist and the outside-checkout installation pass CLI,
+  Quick Top-100, server and pip check. Firefox reproduced the 96 layout cases
+  and 168 badge contrast checks (minimum 6.36:1), including local-only resources
+  and a completed Job. No remote CI result is claimed.
+- **Next: Block 11 — Observed Password Pattern Learning. Not started.**
 
 ## Future enhancements
 

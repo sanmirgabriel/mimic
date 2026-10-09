@@ -97,7 +97,8 @@ def test_service_profiles(service_id, display, tokens, roles):
         assert any(s.candidate.value == 'ACME' + value and s.candidate.origins == term.origins + seeds[value].origins for s in plan.seeds)
         assert any(s.candidate.value == value + 'ACME' and s.candidate.origins == seeds[value].origins + term.origins for s in plan.seeds)
         assert seeds[value + roles[0]].origins == seeds[value].origins + (Origin('knowledge',f'service.{service_id}.role',roles[0]),)
-    assert len({p.id for p in SERVICE_PROFILES}) == 5
+    assert [p.id for p in SERVICE_PROFILES] == [
+        "wordpress", "mysql", "postgresql", "mssql", "windows-ad", "grafana", "rabbitmq"]
 
 
 @pytest.mark.parametrize('config', [

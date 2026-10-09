@@ -9,7 +9,7 @@ from functools import partial
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import PlainTextResponse, RedirectResponse
@@ -27,6 +27,7 @@ from mimic.application import (
     RankingOptions,
 )
 from mimic.intelligence.builtins import SERVICE_PROFILES
+from mimic.intelligence import catalog
 from mimic.ranking import BUDGET_PRESETS
 from mimic.packs import PackError, PackRegistry
 from mimic.domain.context import KeyValueContextExtractor
@@ -107,6 +108,8 @@ def origin_label(locale: str, origin: dict) -> str:
         return translate(locale, "origin.dataset")
     if source == "ready_candidate":
         return translate(locale, "origin.ready")
+    if source == "knowledge" and origin["field"] == "common_password":
+        return translate(locale, "catalog.common_password_origin")
     field = origin["field"].rsplit(":", 1)[-1]
     if source == "knowledge" and field.startswith("service.") and field.endswith((".role", ".token")):
         return translate(locale, "origin.service", service=field.split(".")[1],
@@ -252,6 +255,26 @@ def mount_web(app: FastAPI) -> None:
                       packs=await _call(packs.list), selected=selected, verified=verified,
                       values=values or {}, error=error)
 
+    @app.get('/services', include_in_schema=False)
+    async def service_catalog(request: Request, q: str = Query('', max_length=200), category: str = 'services'):
+        if category not in ('services', 'common'):
+            raise WebError(400, Message('error.invalid'))
+        return render(request, 'services.html', title_key='catalog.title', nav='services',
+                      services=catalog.list_services(q), query=q, category=category,
+                      selected_service=None, credentials=(), common=catalog.common_vocabulary())
+
+    @app.get('/services/{service_id}', include_in_schema=False)
+    async def service_detail(request: Request, service_id: str):
+        try:
+            service = catalog.get_service(service_id)
+        except ValueError:
+            raise WebError(404, Message('error.not_found'))
+        profile = next(p for p in SERVICE_PROFILES if p.id == service.id)
+        return render(request, 'services.html', title=service.display_name, nav='services',
+                      services=catalog.list_services(), query='', category='services',
+                      selected_service=service, selected_profile=profile,
+                      credentials=catalog.list_credentials(service.id), common=catalog.common_vocabulary())
+
     @app.get('/packs', include_in_schema=False)
     async def pack_list(request: Request):
         return await packs_page(request)
@@ -318,10 +341,17 @@ def mount_web(app: FastAPI) -> None:
                       warnings=warnings, packs=await _call(packs.list), **await choices(request))
 
     @app.get("/generate", include_in_schema=False)
-    async def generation_form(request: Request, target_id: UUID | None = None, organization_id: UUID | None = None):
+    async def generation_form(request: Request, target_id: UUID | None = None, organization_id: UUID | None = None,
+                              service: str | None = None):
         values = {"mode": "saved", "target_id": str(target_id)} if target_id else {}
         if organization_id:
             values.update(mode="organization", organization_id=str(organization_id))
+        if service is not None:
+            try:
+                catalog.get_service(service)
+            except ValueError:
+                raise WebError(400, Message('error.service', {'service': service}))
+            values['selected_services'] = [service]
         return await generation_page(request, values)
 
     async def generation_input(request: Request, form, values: dict) -> tuple[GenerationRequest, str | None]:
@@ -413,6 +443,7 @@ def mount_web(app: FastAPI) -> None:
                                    policy=policy, limits=limits,
                                    sources=SourceOptions(dataset_paths=(source_paths["dataset"],) if "dataset" in source_paths else (),
                                                          ready_candidate_paths=(source_paths["ready"],) if "ready" in source_paths else (),
+                                                         include_common_passwords=values.get('include_common_passwords') == 'on',
                                                          include_ptbr=values.get("include_ptbr") == "on"))
         selected_packs = form.getlist('packs')
         if len(selected_packs) > 64:
@@ -435,6 +466,7 @@ def mount_web(app: FastAPI) -> None:
             summary = prepared.summary().to_dict()
             if not (summary["target_seed_count"] or summary["organization_seed_count"] or summary["context_fact_count"]
                     or summary["ptbr_enabled"] or summary["dataset_source_count"] or summary["ready_candidate_source_count"]
+                    or summary.get('common_password_count')
                     or (generation.intelligence.service_profiles and summary["knowledge_seed_count"])):
                 raise WebInputError("error.inputs")
             if values.get("intent") == "preview":
