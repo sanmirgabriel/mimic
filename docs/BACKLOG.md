@@ -1,10 +1,11 @@
 # MIMIC product backlog
 
-Canonical product backlog and delivery direction, updated 2026-10-13. Blocks
-7–10 are merged in `main` (Block 10: PR #13; CI on Python 3.10/3.11/3.12
-passed). **Block 11 is implemented; Gate 11 recommends operator commit review.** Older audit
-notes below record the pre-merge state at the time of their execution; this
-table is the current source of truth for delivery status.
+Canonical product backlog and delivery direction, updated 2026-10-14. Blocks
+7–12 are merged in `main` (Block 11: PR #14; Block 12: [PR #15](https://github.com/sanmirgabriel/mimic/pull/15),
+merge `6398108f8699cd24068d06d39cf964671bab8354`). PR #15 CI passed on
+Python 3.10/3.11/3.12. **Gate 12.5 completed locally; ready for operator commit review.**
+Older audit notes below record their pre-merge state; this table is the current
+source of truth for delivery status. No Block 13 implementation has started.
 
 | Block | Epic | Scope |
 | --- | --- | --- |
@@ -14,8 +15,9 @@ table is the current source of truth for delivery status.
 | 8.5 | Web Internationalization + Theme Switcher ✅ | PT-BR/EN, dark/light and responsive local UX. |
 | 9 | Dataset & Knowledge Packs ✅ | Local digest-pinned, attributable, versioned Seed/Ready corpora and CLI/Web management. |
 | 10 | Service Intelligence + Default Credential Catalog ✅ | Seven service profiles, source-qualified default pairs, separate common values, local lookup/export, opt-in ready candidates. |
-| 11 | Observed Password Pattern Learning (implemented; ready for operator commit review) | Bounded local authorized analysis, versioned aggregate artifacts, CLI analyze/show, read-only Web lookup and explicit structural filtering through the existing engine. |
-| 12 | Password Popularity / Frequency | Versioned empirical pattern frequencies, with representativeness, licensing and transparent evidence. |
+| 11 | Observed Password Pattern Learning ✅ (merged PR #14) | Bounded local authorized analysis, versioned aggregate artifacts, CLI analyze/show, read-only Web lookup and explicit structural filtering through the existing engine. |
+| 12 | Password Popularity / Frequency ✅ (merged PR #15) | Versioned empirical pattern frequencies, with representativeness, licensing and transparent evidence. |
+| 12.5 | Organization Name Intelligence (implemented; Gate 12.5 ready for commit review) | Bounded compound company/name/alias seeds, component casing and initials through the existing engine; explicit frozen request switch and historical opt-out. |
 | 13 | Hashcat Convergence | Differentially verified, honest rule/base exports aligned with supported existing transformations. |
 | 14 | Service Catalog Expansion | Grow reviewed technology/default-credential knowledge with sources, applicability and versions. |
 | 15 | Offline Password Quality Audit | Local analysis of authorized password-quality samples, policy compliance, weak patterns and aggregated reuse. |
@@ -220,7 +222,7 @@ table is the current source of truth for delivery status.
   [the Gate report](GATE11_AUDIT.md). Recommendation: **ready for operator commit
   review**; no commit, push or merge performed; Block 12 remains unstarted.
 
-## Block 12 — Password Popularity & Frequency (implemented; ready for operator commit review)
+## Block 12 — Password Popularity & Frequency (merged PR #15)
 
 - Immutable versioned aggregate evidence with canonical Block 11 pattern IDs,
   exact sample denominators, provenance, licensing/local-use/redistribution
@@ -234,7 +236,8 @@ table is the current source of truth for delivery status.
   The small symbolic holdout does not justify production ranking integration.
 - See [ADR 0012](adr/0012-password-popularity-frequency.md) and the
   [implementation report](BLOCK12_IMPLEMENTATION_REPORT.md) for validation and
-  methodological limits. Gate 12 completed; pending operator review. No commit, push or merge.
+  methodological limits. Gate 12 completed; operator subsequently committed and
+  merged PR #15 on 2026-10-14. PR CI passed on Python 3.10/3.11/3.12.
   Block 13 has not started. Original Blocks 11–21 roadmap below is preserved.
 
 Gate 12 pre-commit audit (2026-10-14): **1,371 passed initially; 1,414 passed
@@ -244,7 +247,54 @@ errors and stream setup, and close a staging descriptor after setup failure.
 Historical generation bytes/metadata remain unchanged, including 159,175 ACME +
 WordPress evaluations and Quick Top-100. See [Gate 12](GATE12_AUDIT.md) for final
 suite/package/browser evidence, methodological limits and recommendation.
-No commit, push, merge, Block 13 or compound-corporate-name change.
+That Gate performed no commit, push, merge, Block 13 or compound-name change;
+the subsequent operator merge and new Block 12.5 work are recorded separately.
+
+## Block 12.5 — Organization Name Intelligence (implemented; Gate 12.5 ready for commit review)
+
+- Compound company/name/alias facts supply bounded component, concatenation,
+  lexical case and upper/lower initials seeds to the existing Generator. No
+  invented words, NLP, network, second mutation engine or new frequency signal.
+- Eight names, 256 codepoints, eight detailed components and 24 additional seeds
+  per name; longer component lists use a whole-name fallback. Single lexical
+  brands retain historical behavior. Core caps and score-v1 remain unchanged.
+- Modern CLI/Web default on with explicit opt-out; API/application requests
+  capture True explicitly. Missing/false stays historical/off in old snapshots.
+  Web uses its own form marker, retains preview/error choices and remains PT-BR/EN.
+- All nine required affix examples generate under none/partial exhaustive at
+  caps 256/5,000. This fixture retains none of them in Quick/Focused at those caps;
+  cap 50 loses the requested years. Generated and retained coverage are distinct.
+- Baseline **1,414 passed**; final **1,486 passed**, including 72 new cases.
+  Twenty application and two CLI disabled comparisons match required main, with
+  ACME + WordPress still at 159,175 evaluated. Hash seeds 1/42/777 match full evidence.
+- Wheel/sdist/outside-checkout CLI/Web/API/Job checks pass. Installed Firefox
+  passes 36 locale/theme/375/768/1440/state combinations and native opt-out/Job.
+  Local new-feature validation does not constitute new supported-matrix remote CI.
+- Partial Quick simple scan: 86,248 → 115,687 evaluated, median wall 1.4072 →
+  1.8910 s. Complex scan: 447,553 → 529,101, median wall 7.9474 → 9.9938 s.
+  Additional coverage costs work; budgets do not limit scan CPU or global dedup.
+- See [ADR 0012.5](adr/0012-5-organization-name-intelligence.md) and the
+  [implementation report](BLOCK12_5_IMPLEMENTATION_REPORT.md) for limits,
+  historical contracts, coverage, performance and evidence. No agent commit,
+  push or merge; Block 13 remains unstarted.
+
+
+Gate 12.5 independent pre-commit audit (2026-10-14): **1,486 passed initially;
+1,550 passed after 64 adversarial/regression cases**. One low-severity preview
+issue is corrected: Unicode-expanded forms beyond the seed ceiling now count
+that name as limited and show the existing warning, once per name. Candidate
+bytes/causes and score-v1 remain unchanged. Twenty historical application and two
+CLI comparisons, 36 hash-seed scenarios, installed wheel/sdist and 36 Firefox
+locale/theme/viewport/state cases pass. All initial files/tests are preserved.
+
+Default partial Quick/Focused are entirely organization+role families in this
+fixture. The nine examples rank 59,706–66,920, with scores 29–38, below Quick 52
+and Focused 50–52. Recommend future, explicitly versioned/opt-in evaluation of
+causal-family diversity, concentration and authorized holdout Recall@K; no ranking
+change is implemented here. See [Gate 12.5](GATE12_5_AUDIT.md) for exact ranks,
+source precedence, bounded scans, measurements and remaining limitations. Ready
+for operator diff/commit review, manual PR and supported-matrix CI. No commit,
+push, merge or Block 13 work was performed by this Gate.
 
 ## Product vision and delivery roadmap (Blocks 11–21)
 

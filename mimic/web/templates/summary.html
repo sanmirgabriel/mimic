@@ -1,6 +1,7 @@
 {% if warnings %}{% for warning in warnings %}<div class="alert warning">{{ warning }}</div>{% endfor %}{% endif %}
 {% if summary %}
 <dl class="summary-list">
+<div><dt>{{ t('organization_variants.label') }}</dt><dd>{% if summary.get('organization_variants') %}{{ t('state.enabled') }} · {{ t('organization_variants.count', count=summary.organization_variant_seed_count) }}{% else %}{{ t('state.off') }}{% endif %}</dd></div>
 {% for key,label in [('target_seed_count','summary.target'),('organization_seed_count','summary.org'),('context_fact_count','summary.facts')] %}<div><dt>{{ t(label) }}</dt><dd>{{ summary[key] }}</dd></div>{% endfor %}
 <div><dt>{{ t('summary.ptbr') }}</dt><dd>{{ t('state.enabled') if summary.ptbr_enabled else t('state.off') }}</dd></div>
 {% for key,label in [('dataset_source_count','summary.dataset'),('ready_candidate_source_count','summary.ready')] %}<div><dt>{{ t(label) }}</dt><dd>{{ summary[key] }}</dd></div>{% endfor %}

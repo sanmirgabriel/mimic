@@ -375,6 +375,8 @@ def mount_web(app: FastAPI) -> None:
                     "max_len": "0", "output_priority": "exhaustive", "max_candidates_per_word": "5000", "max_dataset_lines": "100000"}
         if values is None or "intelligence_form" not in values:
             defaults.update({key: "on" for key in ("intelligence_enabled", "common_numbers", "recent_years", "corporate_roles")})
+        if values is None or not values or request.method == "GET":
+            defaults["organization_variants"] = "on"
         return render(request, "generate.html", status=status, title_key="generation.new", nav="generate",
                       values={**defaults, **(values or {})}, error=error, summary=summary,
                       warnings=warnings, packs=await _call(packs.list), **await choices(request))
@@ -475,6 +477,7 @@ def mount_web(app: FastAPI) -> None:
         except (ValueError, TypeError) as exc:
             raise WebInputError("error.budget") from exc
         result = GenerationRequest(ranking=ranking, target=target, organization=organization, context_facts=tuple(facts),
+                                   organization_variants=values.get("organization_variants_form") == "1" and values.get("organization_variants") == "on",
                                    intelligence=intelligence,
                                    context_path=source_paths.get("context"),
                                    mutations=MutationOptions(values.get("leet_mode", "partial"),
@@ -497,6 +500,8 @@ def mount_web(app: FastAPI) -> None:
     async def generate(request: Request):
         form = await read_form(request)
         values = {key: value for key, value in form.items() if isinstance(value, str)}
+        variants_enabled = values.get('organization_variants_form') == '1' and values.get('organization_variants') == 'on'
+        values['organization_variants'] = 'on' if variants_enabled else ''
         values["selected_services"] = list(form.getlist("service_profiles"))
         values['selected_packs'] = list(form.getlist('packs'))
         try:

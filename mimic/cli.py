@@ -57,6 +57,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("-p", "--pet", help="Target's pet name.")
     p.add_argument("-c", "--company", help="Target's company.")
     p.add_argument("--organization", help="Organization name; no saved record or target required.")
+    p.add_argument("--organization-variants", action=argparse.BooleanOptionalAction, default=None,
+                   help="Bounded organization name/component/acronym seeds (on for generate; off for legacy).")
     p.add_argument("--service", action="append", default=[], choices=[profile.id for profile in SERVICE_PROFILES],
                    help="Contextual service profile (repeatable).")
     p.add_argument("--intelligence", action=argparse.BooleanOptionalAction, default=None,
@@ -370,6 +372,7 @@ def main(argv: list[str] | None = None) -> int:
         logger.error('Cannot resolve pack: %s', exc)
         return 1
     request = GenerationRequest(
+        organization_variants=modern if args.organization_variants is None else args.organization_variants,
         ranking=args.budget,
         target=Target(profile.nome or "", profile) if profile is not None else None,
         organization=Organization(args.organization) if args.organization else None,
