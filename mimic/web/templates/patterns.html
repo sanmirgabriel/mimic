@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="page-heading"><div><p class="eyebrow">{{ t('patterns.eyebrow') }}</p><h1>{{ t('patterns.title') }}</h1><p>{{ t('patterns.description') }}</p></div></section>
+<section class="panel"><div class="catalog-body">
+<h2>{{ t('patterns.artifacts') }}</h2>
+<p>{{ t('patterns.help') }}</p>
+<p><code>{{ t('patterns.command', command=pattern_command|default('mimic patterns analyze --help')) }}</code></p>
+<p>{{ t('patterns.directory') }}</p>
+{% if error %}<p class="alert error" role="alert">{{ error }}</p>{% endif %}
+<ul class="catalog-service-list">{% for artifact in artifacts %}<li><a href="/patterns/{{ artifact }}">{{ artifact }}</a></li>{% else %}<li>{{ t('patterns.empty') }}</li>{% endfor %}</ul>
+</div></section>
+{% if report %}
+<section class="panel patterns-summary"><div class="catalog-body">
+<h2>{{ t('patterns.summary') }}</h2>
+<dl class="catalog-metadata">
+{% for key, value in [('source',report.source_label), ('observations',report.sample_size), ('rejected',report.rejected_line_count), ('blank',report.empty_count), ('matched',report.matched_count), ('unsupported',report.unmatched_count), ('distinct',report.distinct_structure_count), ('threshold',report.options.min_occurrences), ('suppressed',report.suppressed_count), ('years',report.year_interval|join('–'))] %}
+<dt>{{ t('patterns.' + key) }}</dt><dd>{{ value }}</dd>{% endfor %}
+</dl>
+<p>{{ t('patterns.duplicates') }}</p><p>{{ t('patterns.limits') }}</p><p>{{ t('patterns.versions') }}: <code>{{ report.schema_version }} · {{ report.extractor_version }} · {{ report.unicode_version }}</code></p>
+<div class="table-wrap"><table><caption class="sr-only">{{ t('patterns.summary') }}</caption><thead><tr><th scope="col">{{ t('patterns.structure') }}</th><th scope="col">{{ t('patterns.occurrences') }}</th><th scope="col">{{ t('patterns.frequency') }}</th><th scope="col">{{ t('patterns.reuse') }}</th></tr></thead><tbody>
+{% for pattern in report.patterns %}<tr><td><code>{{ pattern.structure }}</code></td><td>{{ pattern.occurrences }}</td><td>{{ pattern.relative_frequency.numerator }}/{{ pattern.relative_frequency.denominator }}</td><td>{{ t('patterns.compatible') if pattern.reusable else t('patterns.analysis_only') }}</td></tr>{% else %}<tr><td colspan="4">{{ t('patterns.no_visible') }}</td></tr>{% endfor %}
+</tbody></table></div>
+<p>{{ t('patterns.no_execution') }}</p>
+</div></section>
+{% endif %}
+{% endblock %}

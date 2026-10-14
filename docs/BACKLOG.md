@@ -1,23 +1,30 @@
 # MIMIC product backlog
 
-Canonical product epics. Blocks 7, 8, 8.4, 8.5 and 9 are merged. The Block 9 CI
-performance fix is merged in PR #12. Block 10 is implemented, pending approval
-at Gate 10. The next major product milestone is Block 11.
+Canonical product backlog and delivery direction, updated 2026-10-13. Blocks
+7–10 are merged in `main` (Block 10: PR #13; CI on Python 3.10/3.11/3.12
+passed). **Block 11 is implemented; Gate 11 recommends operator commit review.** Older audit
+notes below record the pre-merge state at the time of their execution; this
+table is the current source of truth for delivery status.
 
 | Block | Epic | Scope |
 | --- | --- | --- |
 | 7 | Password Intelligence Foundation ✅ | Versioned primitives, contextual seeds, services, organization-only flow, causal provenance. |
 | 8 | Scoring / Ranking / Budgets ✅ | Explainable prioritization and explicit generation budgets. |
 | 8.4 | Partial-Leet Coverage Fix ✅ | Original candidate first, then up to max_subs replacements; causal provenance, ranking, caps and compatibility validated. |
-| 8.5 | Web Internationalization + Theme Switcher ✅ | PT-BR default and selectable EN; compact language/theme controls, dark/light palettes and local preferences; presentation only. |
-| 9 | Dataset & Knowledge Packs ✅ | Local versioned UTF-8 packs, digest-pinned snapshots, attribution, streaming Seed/Ready sources and CLI/Web management; Gate 9 audited. |
-| 10 | Service Intelligence + Default Credential Catalog (Gate 10 approval pending) | Implemented: seven service profiles, passive documented pairs, independent common values and explicit ready-password opt-in. |
-| 11 | Observed Password Pattern Learning | Authorized observations and attributable learned patterns. |
-| 12 | Password Popularity / Frequency | Frequency knowledge with transparent sources and licensing. |
-| 13 | Hashcat Convergence | Consistent material and rule export through the existing engine. |
-| 14 | AI Context Assistant | Assisted context extraction through the application service. |
-| 15 | Documentation / Operator UX | Documentation overhaul and operator workflow improvements. |
-| 16 | Benchmarking / Release Hardening | Reproducible benchmarks, packaging and release gates. |
+| 8.5 | Web Internationalization + Theme Switcher ✅ | PT-BR/EN, dark/light and responsive local UX. |
+| 9 | Dataset & Knowledge Packs ✅ | Local digest-pinned, attributable, versioned Seed/Ready corpora and CLI/Web management. |
+| 10 | Service Intelligence + Default Credential Catalog ✅ | Seven service profiles, source-qualified default pairs, separate common values, local lookup/export, opt-in ready candidates. |
+| 11 | Observed Password Pattern Learning (implemented; ready for operator commit review) | Bounded local authorized analysis, versioned aggregate artifacts, CLI analyze/show, read-only Web lookup and explicit structural filtering through the existing engine. |
+| 12 | Password Popularity / Frequency | Versioned empirical pattern frequencies, with representativeness, licensing and transparent evidence. |
+| 13 | Hashcat Convergence | Differentially verified, honest rule/base exports aligned with supported existing transformations. |
+| 14 | Service Catalog Expansion | Grow reviewed technology/default-credential knowledge with sources, applicability and versions. |
+| 15 | Offline Password Quality Audit | Local analysis of authorized password-quality samples, policy compliance, weak patterns and aggregated reuse. |
+| 16 | Effectiveness Benchmark | Reproducible Recall@K, latency, memory, evaluated-candidate and pattern-coverage measurements. |
+| 17 | Audit Reports & Explainability | Local HTML/PDF reports, redaction, provenance, methodology and honest limitations. |
+| 18 | Audit Presets & Workflows | Reusable, transparent presets for organization, service, weak-password and offline-audit workflows. |
+| 19 | Optional AI Context Assistant | Reviewed, opt-in context extraction; no remote dependency or autonomous execution. |
+| 20 | Open Source / Documentation / Operator UX | Fix README; guides, static project site, contributor/security workflows and community onboarding. |
+| 21 | Benchmarking / Release Hardening / Distribution | Packages, performance/security gates, releases and maintained compatibility contracts. |
 
 ## Block 8.4 — Partial-Leet Coverage Fix (completed)
 
@@ -185,6 +192,155 @@ at Gate 10. The next major product milestone is Block 11.
   and 168 badge contrast checks (minimum 6.36:1), including local-only resources
   and a completed Job. No remote CI result is claimed.
 - **Next: Block 11 — Observed Password Pattern Learning. Not started.**
+
+## Block 11 — Observed Password Pattern Learning (implemented; ready for operator commit review)
+
+- Local, explicitly authorized streaming analysis with strict UTF-8, fixed or
+  explicitly bounded years, twelve explainable structures, descriptive sample
+  frequencies and a conservative five-occurrence display threshold.
+- Versioned, strictly validated aggregate JSON; CLI `patterns analyze/show`,
+  safe publication without overwrites, and PT-BR/EN read-only Web consultation.
+  No password uploads, persistent observation Jobs, raw-value retention or remote
+  processing. SPECIAL suffixes are analysis-only; unsupported shapes are counted.
+- Opt-in structural filtering delegates to the existing GenerationService,
+  preserving actual candidate provenance, caps, policy, score-v1 and Top-K.
+  Blocks 12–21 remain planned; the original roadmap below is preserved.
+- See [ADR 0011](adr/0011-observed-password-pattern-learning.md) and the
+  [implementation report](BLOCK11_IMPLEMENTATION_REPORT.md) for contracts,
+  compatibility evidence, privacy limitations and Gate 11 review readiness.
+- Gate 11 independent pre-commit audit (2026-10-13): **1,216 passed initially;
+  1,256 passed after 40 audit cases**. Corrections pin Web directory/file reads,
+  sanitize directory failures, consume short-read JSON streams through EOF within
+  the artifact limit, and remove private argparse exception context. No additional
+  structures, generation engine or frequency scoring were introduced.
+- All 16 application/two CLI comparisons against the required base still match;
+  24 Firefox locale/theme/viewport cases, empty/suppressed/invalid states, keyboard
+  and contrast checks pass. Wheel/sdist and outside-checkout CLI/SSR pass.
+  Suppression inference and platform/runtime limits are explicitly documented in
+  [the Gate report](GATE11_AUDIT.md). Recommendation: **ready for operator commit
+  review**; no commit, push or merge performed; Block 12 remains unstarted.
+
+## Product vision and delivery roadmap (Blocks 11–21)
+
+**Vision:** MIMIC is an open-source, local-first *Password Security Intelligence & Audit Platform* for authorized assessments. It should help an operator answer: **what is worth evaluating, why was it selected, and what evidence supports the decision?**
+
+Five connected product pillars:
+
+1. **Knowledge Base** — curated services, documented initial credentials with applicability/source/version, independent common weak values, and versioned external knowledge packs.
+2. **Password Intelligence** — target-, organization- and service-aware candidate generation, bounded mutations, explainable provenance, priorities and budgets.
+3. **Offline Password Audit** — local, explicitly authorized analysis of password-quality samples, policies, duplicates and aggregate patterns; no remote guessing.
+4. **Research & Benchmarking** — observable pattern structures, empirically qualified frequencies and reproducible coverage/Recall@K measurements.
+5. **Pentest Operator Workflow** — presets, interoperable outputs, reports, reproducible jobs and simple PT-BR/EN UX.
+
+The product is **usable now** as a local candidate generator and passive service-credential reference (through merged Block 10). It is **not yet** a comprehensive catalog or an offline password-quality analyzer; those are planned below. There is no built-in password spraying, brute forcing, credential stuffing, online validation, cracking or autonomous targeting.
+
+### Phase 1 — Learn and measure (11–13)
+
+**Block 11 — Observed Password Pattern Learning (NEXT)**
+
+- Analyze only operator-supplied, authorized, local observations; support synthetic fixtures for tests. Separate **learning pattern structures** from retaining or exporting raw secrets.
+- Infer a deliberately small, deterministic grammar such as `WORD + SEPARATOR + YEAR`, `WORD + DIGITS`, `ACRONYM + YEAR` with counts, source label, sample size and extraction rules. No predictive-success claims, no opaque ML, no auto-scraping.
+- Introduce a minimal application-level analyzer with bounded input, streaming and explicit error reporting; never put raw observations into Job snapshots, debug logs, exceptions, reports, filenames or analytics by default.
+- Permit optional, constrained reuse only through the **existing** generation service/mutators for shapes actually representable; unsupported shapes must be reported, not simulated by a second engine. Do not change `score-v1` silently.
+- **Gate 11:** privacy and non-persistence tests; parsing/matching ambiguity; duplicates and deterministic counts; malformed, huge and Unicode inputs; representative PT-BR patterns; PYTHONHASHSEED consistency; old outputs byte-identical; no material hot-path regression; wheel/sdist/CLI smoke. Begin measuring quality on synthetic or explicitly authorized holdout data, without exposing plaintext.
+
+**Block 12 — Password Popularity / Frequency**
+
+- Add versioned, provenance-rich aggregate frequency datasets and metadata (sample size, origin, collection period, representativeness, geography/sector if supportable, license, limitations).
+- Keep empirical frequency separate from existing heuristic `score-v1`; do not imply global or Brazilian-wide probabilities or backfill invented statistics.
+- Compare alternatives in a transparent evaluation workflow before considering opt-in influence on prioritization.
+- **Gate 12:** source/licensing audit, aggregate privacy review, bias/holdout checks, deterministic ranking, compatibility and evidence reproducibility.
+
+**Block 13 — Hashcat Convergence**
+
+- Align existing Hashcat `.rule` export with candidate generation where the Hashcat rule language can express an equivalent transformation; report unsupported behavior clearly.
+- Provide paired base material and rules with provenance/format documentation, not a new cracking engine.
+- **Gate 13:** differential comparison of generated candidates vs. rules over supported cases, output escaping, performance and backward compatibility.
+
+### Phase 2 — Knowledge base and offline quality (14–16)
+
+**Block 14 — Service Catalog Expansion**
+
+- Grow beyond seven initial technologies/two documented pairs, curated by category: observability/admin panels, databases, web/CMS, message brokers, networking/identity and relevant distributions/deployment variants.
+- Each documented initial pair needs trustworthy evidence, installation/release applicability, restrictions and revision history; no invented universal defaults. Clearly distinguish usernames/conventions, documented pairs, generic weak values and heuristics.
+- Prefer small reviewed additions with source/version tests and community review rather than a giant unverified corpus. Packs handle external corpora.
+- **Gate 14:** credible source audit, schema/dedup, search usability, safe display/CSV, PT-BR/EN accuracy, wheel packaging and determinism.
+
+**Block 15 — Offline Password Quality Audit**
+
+- Locally assess explicitly provided authorized material for length/complexity-policy conformity, predictability and organization-specific patterns, weak-list overlap, and exact reuse where the supplied material permits it.
+- Separate policy compliance from actual password strength. Use aggregate results by default; never persist plaintext by default or imply reliable crackability from arbitrary entropy formulas.
+- Consider a sensitive-data import path isolated from routine Job storage and logs, with file size limits, clear lifecycle and safe cleanup.
+- **Gate 15:** data-exposure and retention tests, malformed/Unicode/large inputs, policy correctness, known-fixture findings, clear limitations and no remote actions.
+
+**Block 16 — Effectiveness Benchmark**
+
+- Make candidate effectiveness measurable: Recall@100, @1,000, @10,000, rank distributions, coverage by pattern family, generation latency, memory, evaluated count and artifact size.
+- Establish independent authorized/synthetic evaluation sets with train/holdout discipline. Do not publish sensitive corpora or boast unsupported success rates.
+- Compare baselines and regressions repeatably; record configuration/catalog/package versions and machine conditions.
+- **Gate 16:** reproducible methodology, no test-set leakage, interpretable metrics and CI-friendly smoke benchmarks. Start basic benchmark capture already in Block 11.
+
+### Phase 3 — Professional operator UX (17–19)
+
+**Block 17 — Audit Reports & Explainability**
+
+- Provide local HTML/PDF reports about scope/context, sources, policies, observed aggregate weaknesses, candidate-generation settings, score/provenance and evaluation limitations.
+- Redact raw passwords and sensitive target data by default; any inclusion must be deliberate and explicit. Report results are not evidence of successful authentication.
+- **Gate 17:** report provenance and consistency, redaction/escaping, PT-BR/EN, reproducible export and secure temp handling.
+
+**Block 18 — Audit Presets & Workflows**
+
+- Add transparent, editable presets for Corporate Context, Service Assessment, Weak Password Review and Offline Audit Preparation.
+- Presets configure **existing** features; never start remote auth or unreviewed generation automatically. Preview consequences and budgets before execution.
+- **Gate 18:** preset roundtrip, old defaults unchanged, no second engine, mobile/keyboard UX and deterministic outputs.
+
+**Block 19 — Optional AI Context Assistant**
+
+- Assist with extracting technology/context and proposing structured inputs, always reviewed and validated by the application service before use.
+- Core product remains offline and functional without AI. External providers and any transmission of private data must be separate explicit opt-ins; prefer local models when feasible.
+- **Gate 19:** fail-closed validation, privacy consent, no autonomous execution, auditable suggestions, zero dependency of core tests on remote services.
+
+### Phase 4 — Community and release maturity (20–21)
+
+**Block 20 — Open Source / Documentation / Operator UX**
+
+- Fix the presently stale README (which describes already-merged Web/API/ranking as future); create accurate Quickstart, CLI/API/Web use guides, operator workflows, screenshots, examples and boundaries.
+- Prepare `CONTRIBUTING.md`, `SECURITY.md`, code of conduct, issue/PR templates, changelog and a source-review rubric for catalog contributions; distinguish MIT code licensing from independent datasets/attribution.
+- Ship a **static** project/documentation website and, if useful, an explicitly non-sensitive catalogue demo. No public execution of the Python backend and no collection of passwords.
+- **Gate 20:** clean-room installation on supported platforms, first-use UX, docs accuracy, contributor flow and sensible issue/security disclosure process.
+
+**Block 21 — Benchmarking / Release Hardening / Distribution**
+
+- Package reproducible, tested versions; wheel/sdist, release automation, compatibility/security regression checks, changelog and GitHub Releases.
+- Assess PyPI package name and publishing permissions before promising `pipx install mimic`; consider `pipx`, install-from-GitHub and optional standalone packages.
+- Establish release/upgrade compatibility, source hashes and security-response/maintenance process. Build toward `v1.0.0` based on validated stability and user feedback, not simply completion of features.
+- **Gate 21:** installed-artifact smoke across Python matrix, performance baselines, docs/packaging integrity and rollback/release checks.
+
+### Release milestones (cross-cutting, not extra Blocks)
+
+- **A — Public experimental release:** after focused installation/security/README review, publish a `v0.1.0`-style release **before** all future blocks are finished. No claim of product stability beyond validated contracts.
+- **B — Intelligence preview:** after Blocks 11–13, demonstrate deterministic learning/evidence/Hashcat interoperability with reproducible tests.
+- **C — Audit platform preview:** after Blocks 14–18, curated service depth, offline audit, effectiveness metrics, reporting and presets.
+- **D — Stable release candidate:** after user testing and release hardening, consider `v1.0.0` when the stability bar is actually met.
+
+### Open source, hosting and sustainability
+
+- **Distribution model:** keep source code and core local-first functionality available for free under the repository license. Everyone runs the engine and audits on their own machine. Review dataset licenses independently; no automatic redistribution of third-party leaks.
+- **Public presence:** GitHub source/releases/issues/discussions; optional static documentation/landing site on GitHub Pages or Cloudflare Pages. No server-side processing required to present the project/catalog.
+- **Cost baseline:** repository + static hosting can start at free tiers; an optional domain is the main initial recurring purchase. Review plan limits and prices before commitments; developer time and maintenance are real costs.
+- **Support model:** optional GitHub Sponsors/donations and paid enterprise support, training or custom integrations, without removing the free local core. Don't expect donations to fund essential infrastructure early on.
+- **Hosted SaaS:** defer until there is real demand and a separate threat-model/design covering account security, isolation, abuse prevention, CPU/memory budgets, logging, retention, compliance and billing. **Never expose the present loopback-only application directly as a public multi-tenant backend.**
+- **Community source contributions:** require documentation/evidence, version/applicability, redistribution rights and CI validation for new default-credential records or packs; maintainers review changes before accepting them.
+
+### Permanent architecture / quality bar for Blocks 11–21
+
+- Local-first and deterministic; source/version/digest pinning where supported; provenance retained and explainable.
+- One existing generation engine; no independent password generator, cracking engine, remote login tester, spraying tool or scanning stack hidden in the knowledge layer.
+- Bounded streaming and budgets, minimal abstractions, quick UI and measurable performance; avoid overengineering.
+- Private or user-provided password observations are sensitive: no remote transmission, raw logging or persistence by default; explicitly authorized analysis only.
+- Clear difference between documented defaults, common weak values, heuristic candidates, observed structures and empirically supported frequencies.
+- No changes to legacy outputs or score-v1 without explicit versioned contract, migration rationale and regression proof.
+- Delivery discipline: implement on feature branch → tests → Gate audit → review diff → operator's **manual commit** → PR/CI → manual merge. AI agents never commit, push or merge.
 
 ## Future enhancements
 
