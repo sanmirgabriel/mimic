@@ -1,0 +1,297 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "frequency-knowledge-v1"
+    },
+    "dataset_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+    },
+    "dataset_version": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,31}$"
+    },
+    "metadata_non_sensitive": {
+      "const": true
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]+$"
+        },
+        "category": {
+          "enum": [
+            "synthetic",
+            "authorized-local",
+            "published-aggregate"
+          ]
+        },
+        "methodology": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]+$"
+        },
+        "attribution": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]+$"
+        },
+        "license": {
+          "enum": [
+            "CC0-1.0",
+            "CC-BY-4.0",
+            "LicenseRef-Local",
+            "NOASSERTION"
+          ]
+        },
+        "local_use_authorized": {
+          "const": true
+        },
+        "redistribution": {
+          "enum": [
+            "permitted",
+            "forbidden",
+            "unknown"
+          ]
+        },
+        "limitations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]+$"
+          }
+        },
+        "sample_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "reference_url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "pattern": "^https://",
+              "format": "uri"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "collection_start": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "collection_end": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "population": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "geography": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sector": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "coverage_evidence": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "title",
+        "category",
+        "methodology",
+        "attribution",
+        "license",
+        "local_use_authorized",
+        "redistribution",
+        "limitations",
+        "sample_id"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "redistribution": {
+                "const": "permitted"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "license": {
+                "enum": [
+                  "CC0-1.0",
+                  "CC-BY-4.0"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sample_size": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 9223372036854775807
+        },
+        "sample_unit": {
+          "enum": [
+            "observations",
+            "unique-passwords"
+          ]
+        },
+        "unicode_version": {
+          "type": "string",
+          "pattern": "^[0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{1,2}$"
+        },
+        "year_max": {
+          "type": "integer",
+          "minimum": 1900,
+          "maximum": 9999
+        },
+        "min_occurrences": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 9223372036854775807
+        },
+        "grammar_version": {
+          "const": "observed-shapes-v1"
+        },
+        "extractor_version": {
+          "const": "pattern-extractor-v1"
+        }
+      },
+      "required": [
+        "sample_size",
+        "sample_unit",
+        "unicode_version",
+        "year_max",
+        "min_occurrences",
+        "grammar_version",
+        "extractor_version"
+      ]
+    },
+    "patterns": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "enum": [
+              "observed-pattern.word.v1",
+              "observed-pattern.word-special.v1",
+              "observed-pattern.word-year.v1",
+              "observed-pattern.word-digits.v1",
+              "observed-pattern.word-separator-year.v1",
+              "observed-pattern.word-separator-digits.v1",
+              "observed-pattern.acronym.v1",
+              "observed-pattern.acronym-special.v1",
+              "observed-pattern.acronym-year.v1",
+              "observed-pattern.acronym-digits.v1",
+              "observed-pattern.acronym-separator-year.v1",
+              "observed-pattern.acronym-separator-digits.v1"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          }
+        },
+        "required": [
+          "id",
+          "count"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "dataset_id",
+    "dataset_version",
+    "metadata_non_sensitive",
+    "source",
+    "measurement",
+    "patterns"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mimic:frequency-knowledge-v1",
+  "$comment": "Authoritative Python validation additionally enforces 32768 input bytes, strict duplicate keys, integer types (no bool/float), Unicode category controls, HTTPS host/port safety, date order, evidence-supported coverage, unique pattern IDs, exclusive counts <= sample_size and count == 0 or count >= min_occurrences. No schema URL is fetched."
+}

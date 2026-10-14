@@ -191,6 +191,9 @@ def main(argv: list[str] | None = None) -> int:
         Exit code: 0 success, 1 input error, 2 I/O error.
     """
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "frequencies":
+        from mimic.frequencies.cli import command
+        return command(argv[1:])
     if argv and argv[0] == "patterns":
         return _patterns_command(argv[1:])
     if argv and argv[0] in ("services", "credentials"):

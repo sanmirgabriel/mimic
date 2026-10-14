@@ -220,6 +220,32 @@ table is the current source of truth for delivery status.
   [the Gate report](GATE11_AUDIT.md). Recommendation: **ready for operator commit
   review**; no commit, push or merge performed; Block 12 remains unstarted.
 
+## Block 12 — Password Popularity & Frequency (implemented; ready for operator commit review)
+
+- Immutable versioned aggregate evidence with canonical Block 11 pattern IDs,
+  exact sample denominators, provenance, licensing/local-use/redistribution
+  declarations and explicit sampling/privacy limits. Synthetic fixtures only.
+- Bounded descriptor-confined local registry; atomic import, conflict/idempotency
+  and digest verification. CLI `frequencies` offers import/list/search/show/verify,
+  source-preserving comparison and a fixed synthetic structural-slot evaluation.
+- Read-only PT-BR/EN SSR with source metadata, exact proportions and verified
+  digest; no uploads, source downloads, automatic selection, pooling or Job option.
+- `score-v1`, generation, Block 11, API/persistence and packs remain unchanged.
+  The small symbolic holdout does not justify production ranking integration.
+- See [ADR 0012](adr/0012-password-popularity-frequency.md) and the
+  [implementation report](BLOCK12_IMPLEMENTATION_REPORT.md) for validation and
+  methodological limits. Gate 12 completed; pending operator review. No commit, push or merge.
+  Block 13 has not started. Original Blocks 11–21 roadmap below is preserved.
+
+Gate 12 pre-commit audit (2026-10-14): **1,371 passed initially; 1,414 passed
+after 43 Gate cases**. Minimal
+corrections validate standalone ratios, sanitize concurrent/unsupported filesystem
+errors and stream setup, and close a staging descriptor after setup failure.
+Historical generation bytes/metadata remain unchanged, including 159,175 ACME +
+WordPress evaluations and Quick Top-100. See [Gate 12](GATE12_AUDIT.md) for final
+suite/package/browser evidence, methodological limits and recommendation.
+No commit, push, merge, Block 13 or compound-corporate-name change.
+
 ## Product vision and delivery roadmap (Blocks 11–21)
 
 **Vision:** MIMIC is an open-source, local-first *Password Security Intelligence & Audit Platform* for authorized assessments. It should help an operator answer: **what is worth evaluating, why was it selected, and what evidence supports the decision?**

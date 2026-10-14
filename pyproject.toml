@@ -19,6 +19,7 @@ include = ["mimic*"]
 
 [tool.setuptools.package-data]
 "mimic.data.ptbr" = ["*.txt"]
+"mimic.data.frequencies" = ["*.json"]
 "mimic.web" = ["templates/*.html", "static/*.css", "static/*.js", "static/*.txt"]
 
 [tool.pytest.ini_options]

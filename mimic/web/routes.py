@@ -263,6 +263,24 @@ def mount_web(app: FastAPI) -> None:
                       services=catalog.list_services(q), query=q, category=category,
                       selected_service=None, credentials=(), common=catalog.common_vocabulary())
 
+    @app.get('/frequencies', include_in_schema=False)
+    @app.get('/frequencies/{identity}', include_in_schema=False)
+    async def frequency_knowledge(request: Request, identity: str | None = None,
+                                  q: str = Query('', max_length=200)):
+        from mimic.frequencies import FrequencyError, FrequencyRegistry
+        registry = FrequencyRegistry(manager.paths)
+        try:
+            datasets = await run_in_threadpool(registry.list, q)
+            selected = None if identity is None else (await run_in_threadpool(registry.get, identity)).evidence()
+            response = render(request, 'frequencies.html', title_key='frequency.title', nav='frequencies',
+                              datasets=datasets, selected=selected, query=q, error=None,
+                              frequency_command='mimic frequencies --data-dir DATA_DIR import aggregates.json')
+        except FrequencyError:
+            response = render(request, 'frequencies.html', status=422, title_key='frequency.title', nav='frequencies',
+                              datasets=(), selected=None, query='', error=Message('frequency.invalid'))
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+
     @app.get('/patterns', include_in_schema=False)
     @app.get('/patterns/{artifact_id}', include_in_schema=False)
     async def observed_patterns(request: Request, artifact_id: str | None = None):

@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="page-heading"><div><p class="eyebrow">{{ t('patterns.eyebrow') }}</p><h1>{{ t('frequency.title') }}</h1><p>{{ t('frequency.description') }}</p></div></section>
+<section class="panel patterns-summary frequency-knowledge"><div class="catalog-body">
+<p>{{ t('frequency.distinction') }}</p><p>{{ t('frequency.privacy') }}</p>
+<p><code>{{ t('patterns.command', command=frequency_command|default('mimic frequencies --help')) }}</code></p>
+<form method="get" action="/frequencies"><label for="frequency-search">{{ t('frequency.search') }}</label><input id="frequency-search" name="q" maxlength="200" value="{{ query }}"><button type="submit">{{ t('catalog.search_action') }}</button></form>
+{% if error %}<p class="alert error" role="alert">{{ error }}</p>{% endif %}
+<ul class="catalog-service-list">{% for dataset in datasets %}<li><a href="/frequencies/{{ dataset.identity }}">{{ dataset.identity }}</a> · {{ dataset.source.title }}</li>{% else %}<li>{{ t('frequency.empty') }}</li>{% endfor %}</ul>
+</div></section>
+{% if selected %}{% set d = selected.dataset %}{% set s = d.source %}{% set m = d.measurement %}
+<section class="panel patterns-summary frequency-knowledge"><div class="catalog-body"><h2>{{ selected.identity }}</h2>
+<p>{{ t('frequency.verified') }}: <code>{{ selected.sha256 }}</code></p>
+<dl class="catalog-metadata">
+{% for key, value in [('source',s.title), ('category',s.category ~ ' / ' ~ s.sample_id), ('methodology',s.methodology), ('attribution',s.attribution), ('reference',s.reference_url), ('size',m.sample_size), ('unit',t('frequency.' ~ m.sample_unit)), ('scope',s.population)] %}<dt>{{ t('frequency.' ~ key) }}</dt><dd>{{ value if value is not none else t('frequency.unknown') }}</dd>{% endfor %}
+<dt>{{ t('frequency.license') }}</dt><dd>{{ s.license }} / {{ t('frequency.unknown_rights' if s.redistribution == 'unknown' else 'frequency.' ~ s.redistribution) }}</dd>
+<dt>{{ t('frequency.period') }}</dt><dd>{{ s.collection_start or t('frequency.unknown') }} – {{ s.collection_end or t('frequency.unknown') }}</dd>
+<dt>{{ t('frequency.coverage') }}</dt><dd>{{ s.geography or t('frequency.unknown') }} / {{ s.sector or t('frequency.unknown') }} / {{ s.coverage_evidence or t('frequency.unknown') }}</dd>
+<dt>{{ t('frequency.contract') }}</dt><dd>{{ d.schema_version }} / {{ m.grammar_version }} / {{ m.extractor_version }} / {{ m.unicode_version }} / {{ m.year_max }} / {{ m.min_occurrences }}</dd>
+</dl>
+<h3>{{ t('frequency.limitations') }}</h3><ul>{% for item in s.limitations %}<li>{{ item }}</li>{% endfor %}</ul>
+<p>{{ t('frequency.missing') }}</p><p>{{ t('frequency.declarations') }}</p>
+<div class="table-wrap"><table><caption class="sr-only">{{ t('frequency.title') }}</caption><thead><tr><th scope="col">{{ t('patterns.structure') }}</th><th scope="col">{{ t('patterns.frequency') }}</th></tr></thead><tbody>{% for row in selected.frequencies %}<tr><td><code>{{ row.id }}</code></td><td>{{ row.numerator }}/{{ row.denominator }}</td></tr>{% else %}<tr><td colspan="2">{{ t('patterns.no_visible') }}</td></tr>{% endfor %}</tbody></table></div>
+</div></section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,62 @@
+{
+  "dataset_id": "synthetic-a",
+  "dataset_version": "1",
+  "measurement": {
+    "extractor_version": "pattern-extractor-v1",
+    "grammar_version": "observed-shapes-v1",
+    "min_occurrences": 5,
+    "sample_size": 100,
+    "sample_unit": "observations",
+    "unicode_version": "15.1.0",
+    "year_max": 2099
+  },
+  "metadata_non_sensitive": true,
+  "patterns": [
+    {
+      "count": 30,
+      "id": "observed-pattern.word.v1"
+    },
+    {
+      "count": 10,
+      "id": "observed-pattern.word-special.v1"
+    },
+    {
+      "count": 20,
+      "id": "observed-pattern.word-year.v1"
+    },
+    {
+      "count": 5,
+      "id": "observed-pattern.word-digits.v1"
+    },
+    {
+      "count": 15,
+      "id": "observed-pattern.word-separator-year.v1"
+    },
+    {
+      "count": 0,
+      "id": "observed-pattern.word-separator-digits.v1"
+    }
+  ],
+  "schema_version": "frequency-knowledge-v1",
+  "source": {
+    "attribution": "MIMIC synthetic examples",
+    "category": "synthetic",
+    "collection_end": null,
+    "collection_start": null,
+    "coverage_evidence": null,
+    "geography": null,
+    "license": "CC0-1.0",
+    "limitations": [
+      "Synthetic arithmetic fixture; no population representativeness.",
+      "Missing structures are unspecified, not zero."
+    ],
+    "local_use_authorized": true,
+    "methodology": "Invented aggregate counts for software demonstrations; no observations collected.",
+    "population": "Synthetic demonstration slots",
+    "redistribution": "permitted",
+    "reference_url": null,
+    "sample_id": "synthetic-a-reference",
+    "sector": null,
+    "title": "Synthetic fixture A"
+  }
+}
