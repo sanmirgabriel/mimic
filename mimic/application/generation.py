@@ -33,6 +33,7 @@ from mimic.domain.planning import prepare_generation
 from mimic.intelligence.builtins import KNOWLEDGE_VERSION
 from mimic.intelligence.planning import IntelligencePlan, plan_intelligence
 from mimic.intelligence.catalog import common_vocabulary
+from mimic.intelligence.organization import plan_organization_names, OrganizationNamePlan
 from mimic.ranking import GenerationResult, RankingOptions, SCORE_VERSION
 from mimic.ranking.scoring import score_candidate
 from mimic.ranking.topk import select_top_k
@@ -83,6 +84,9 @@ class GenerationPlanSummary:
     packs: tuple = ()
     common_password_count: int = 0
     common_passwords_version: str | None = None
+    organization_variants: bool = False
+    organization_variant_seed_count: int = 0
+    organization_variant_limited_names: int = 0
 
     def to_dict(self) -> dict:
         from dataclasses import asdict
@@ -94,6 +98,9 @@ class GenerationPlanSummary:
         if not self.common_password_count:
             del data['common_password_count']
             del data['common_passwords_version']
+        if not self.organization_variants:
+            for key in ('organization_variants', 'organization_variant_seed_count', 'organization_variant_limited_names'):
+                del data[key]
         return data
 
 
@@ -211,6 +218,15 @@ class GenerationService:
         request = self.freeze_packs(request)
         facts = self._resolve_context(request)
         terms = self._organization_terms(request, facts)
+        org = request.organization or (request.target.organization if request.target else None)
+        names = OrganizationNamePlan()
+        if request.organization_variants:
+            names = plan_organization_names(
+                tuple(term for term in terms if not any(
+                    step.kind == "organization_domain_label" for step in term.transformations)),
+                organization_name=org.name if org else "",
+                organization_id=(org.id or "") if org else "",
+            )
         has_context = self._has_context(request, facts)
         intelligence = request.intelligence
         if intelligence.enabled and not (has_context or intelligence.service_profiles
@@ -243,11 +259,14 @@ class GenerationService:
                 extra_number_candidates=knowledge.numbers,
                 defer_extra_numbers=bool((request.sources.ready_candidate_paths or request.sources.include_common_passwords or
                     any(pack.metadata.kind == 'ready' for pack in request.sources.packs)) and knowledge.numbers),
+                organization_variants=names.candidates,
             )
-            summary = self._summary(request, facts, planned, knowledge)
+            summary = self._summary(request, facts, planned, knowledge, names)
         except (ValueError, TypeError) as exc:
             raise InvalidGenerationRequest(str(exc)) from exc
         warnings = self._warnings(request, facts)
+        if names.limited_names:
+            warnings += ("organization name expansion limited; original seeds preserved",)
         if request.intelligence.enabled and not (planned.target_seed_count or planned.organization_seed_count or facts):
             warnings += ("intelligence enabled without target/organization context",)
         return PreparedGeneration(request, planned, warnings, summary,
@@ -355,7 +374,7 @@ class GenerationService:
 
     def _summary(
         self, request: GenerationRequest, facts: list[ExtractedFact],
-        planned: PlannedGeneration, knowledge: IntelligencePlan,
+        planned: PlannedGeneration, knowledge: IntelligencePlan, names: OrganizationNamePlan,
     ) -> GenerationPlanSummary:
         mutators = ["case"]
         if request.mutations.leet_mode != "none":
@@ -364,6 +383,9 @@ class GenerationService:
         if request.mutations.combine:
             mutators.append("combine")
         return GenerationPlanSummary(
+            organization_variants=request.organization_variants,
+            organization_variant_seed_count=len(names.candidates),
+            organization_variant_limited_names=names.limited_names,
             target_seed_count=planned.target_seed_count,
             organization_seed_count=planned.organization_seed_count,
             context_fact_count=len(facts),

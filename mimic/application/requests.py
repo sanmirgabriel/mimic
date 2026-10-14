@@ -218,6 +218,8 @@ class GenerationRequest:
         limits: Generation cost bounds.
         intelligence: Bounded knowledge inputs; enabled requests capture a reference year.
         ranking: Opt-in priority and retained output budget; exhaustive by default.
+        organization_variants: Bounded lexical company seeds; absent/false is
+            historical behavior. Modern adapters explicitly select True.
     """
 
     target: Target | None = None
@@ -233,6 +235,7 @@ class GenerationRequest:
     limits: GenerationLimits = field(default_factory=GenerationLimits)
     intelligence: IntelligenceOptions = field(default_factory=lambda: IntelligenceOptions(enabled=False))
     ranking: RankingOptions = field(default_factory=RankingOptions)
+    organization_variants: bool = False
 
     def __post_init__(self) -> None:
         self.base_candidates = tuple(self.base_candidates)
@@ -249,6 +252,8 @@ class GenerationRequest:
             raise InvalidGenerationRequest("target must be a Target or None")
         if self.organization is not None and not isinstance(self.organization, Organization):
             raise InvalidGenerationRequest("organization must be an Organization or None")
+        if type(self.organization_variants) is not bool:
+            raise InvalidGenerationRequest("organization_variants must be a boolean")
         for name, value, expected in (
             ("sources", self.sources, SourceOptions),
             ("mutations", self.mutations, MutationOptions),
@@ -319,7 +324,11 @@ class GenerationRequest:
         lists/dicts thereof: no ``argparse.Namespace``, no generators, no open
         file handles, no un-serialized ``Path``. Key order is stable.
         """
-        return {
+        # Jobs serialize before rebuilding/validating. Do not coerce malformed
+        # truthy/falsy values into a valid historical or enabled snapshot.
+        if type(self.organization_variants) is not bool:
+            raise InvalidGenerationRequest("organization_variants must be a boolean")
+        data = {
             "target": _target_to_dict(self.target),
             "organization": asdict(self.organization) if self.organization else None,
             "base_candidates": [asdict(c) for c in self.base_candidates],
@@ -337,6 +346,10 @@ class GenerationRequest:
             "intelligence": self.intelligence.to_dict(),
             "ranking": self.ranking.to_dict(),
         }
+        # Absence is the frozen historical/off contract, not an adapter default.
+        if self.organization_variants:
+            data["organization_variants"] = True
+        return data
 
     @classmethod
     def from_dict(cls, data: dict) -> "GenerationRequest":
@@ -369,6 +382,7 @@ class GenerationRequest:
                 limits=GenerationLimits.from_dict(data.get("limits", {})),
                 intelligence=IntelligenceOptions.from_dict(data.get("intelligence", {"enabled": False})),
                 ranking=RankingOptions.from_dict(data.get("ranking", {})),
+                organization_variants=data.get("organization_variants", False),
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise InvalidGenerationRequest(f"malformed request payload: {exc}") from exc

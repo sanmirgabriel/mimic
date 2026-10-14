@@ -294,7 +294,7 @@ def test_web_empty_state_is_explicitly_scoped_to_catalog_and_errors_preserve_sel
 
 
 def test_two_concurrent_web_locales_and_all_catalog_placeholders(tmp_path):
-    assert len(TRANSLATIONS['pt-BR']) == len(TRANSLATIONS['en']) == 574  # 544 through Block 11 + 30 Block 12 labels.
+    assert len(TRANSLATIONS['pt-BR']) == len(TRANSLATIONS['en']) == 584  # 574 through Block 12 + 10 Block 12.5 labels.
     with TestClient(create_app(data_dir=tmp_path / 'pt')) as pt, TestClient(create_app(data_dir=tmp_path / 'en')) as en:
         pt.cookies.set('mimic_locale', 'pt-BR'); en.cookies.set('mimic_locale', 'en')
         def read(client): return client.get('/services/rabbitmq')

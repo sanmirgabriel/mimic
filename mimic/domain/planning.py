@@ -68,6 +68,7 @@ def prepare_generation(
     extra_seeds: Iterable[Seed] = (),
     extra_number_candidates: Iterable[Candidate] = (),
     defer_extra_numbers: bool = False,
+    organization_variants: Iterable[Candidate] = (),
 ) -> PreparedGeneration:
     """Create the same engine request for CLI and future interfaces.
 
@@ -110,6 +111,7 @@ def prepare_generation(
     organization = deepcopy(organization) if organization is not None else None
     organization_count = organization_seed_count(organization) if organization else 0
     organization_seeds = tuple(_organization_seeds(organization)) if organization else ()
+    variant_seeds = tuple(Seed(candidate) for candidate in organization_variants)
     full_stages = (CaseMutator(), LeetMutator(options.leet_mode),
                    AffixMutator(numbers=numbers, separators=options.separators))
     explicit_stages = (CaseMutator(), LeetMutator(options.leet_mode),
@@ -118,12 +120,13 @@ def prepare_generation(
     def deferred_context() -> Iterator[Seed]:
         # Replay original operands through the same engine with supplementary
         # tokens, after immutable sources. These are never Combine partners.
-        operands = chain(generator._seeds(), (seed.candidate for seed in organization_seeds))
+        operands = chain(generator._seeds(), (seed.candidate for seed in (*organization_seeds, *variant_seeds)))
         for candidate in unique_seeds(operands):
             yield Seed(candidate, stages=full_stages)
 
     def source_seeds() -> Iterator[Seed]:
         yield from organization_seeds
+        yield from variant_seeds
         pending = defer_extra_numbers
         for seed in extra_seeds:
             if not isinstance(seed, Seed):

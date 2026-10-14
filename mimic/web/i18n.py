@@ -561,6 +561,16 @@ MESSAGES = MappingProxyType({
     "warning.ptbr": ("Corpus PT-BR integrado ativado", "ptbr builtins enabled"),
     "warning.context": ("Password Intelligence ativado sem contexto de alvo/organização", "intelligence enabled without target/organization context"),
     "warning.summary": ("O resumo da configuração está indisponível; a solicitação original continua salva.", "Configuration summary is unavailable; the original request remains saved."),
+    "organization_variants.label": ("Variantes do nome da organização", "Organization name variants"),
+    "organization_variants.help": ("Usa componentes, concatenação e siglas de nomes e aliases da organização ou empresa. Limites de geração e Top-K podem reduzir a cobertura.", "Uses components, concatenation and initials from organization or company names and aliases. Generation limits and Top-K can reduce coverage."),
+    "organization_variants.count": ("{count} sementes adicionais", "{count} additional seeds"),
+    "warning.organization_names": ("Expansão do nome da organização limitada; sementes originais preservadas", "organization name expansion limited; original seeds preserved"),
+    "step.organization_name": ("Derivação do nome da organização", "Organization name derivation"),
+    "param.components": ("Componentes", "Components"),
+    "param.component": ("Índice do componente", "Component index"),
+    "param.case": ("Caixa por componente", "Component casing"),
+    "param.organization": ("Organização", "Organization"),
+    "param.organization_id": ("ID da organização", "Organization ID"),
 })
 TRANSLATIONS = MappingProxyType({locale: MappingProxyType(
     {key: pair[index] for key, pair in MESSAGES.items()})
