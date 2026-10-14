@@ -263,6 +263,27 @@ def mount_web(app: FastAPI) -> None:
                       services=catalog.list_services(q), query=q, category=category,
                       selected_service=None, credentials=(), common=catalog.common_vocabulary())
 
+    @app.get('/patterns', include_in_schema=False)
+    @app.get('/patterns/{artifact_id}', include_in_schema=False)
+    async def observed_patterns(request: Request, artifact_id: str | None = None):
+        from mimic.application.observations import ObservationError
+        from mimic.web.patterns import list_artifacts, load_artifact
+
+        try:
+            artifacts = await run_in_threadpool(list_artifacts, manager.paths.root)
+            report = None
+            if artifact_id is not None:
+                report = (await run_in_threadpool(load_artifact, manager.paths.root, artifact_id)).to_dict()
+        except ObservationError:
+            # Never reflect artifact bytes, rejected JSON fields or paths.
+            return render(request, 'patterns.html', status=422, title_key='patterns.title', nav='patterns',
+                          artifacts=(), report=None, error=Message('patterns.invalid'))
+        response = render(request, 'patterns.html', title_key='patterns.title', nav='patterns',
+                          artifacts=artifacts, report=report,
+                          pattern_command='mimic patterns analyze --input FILE --authorized --output DATA_DIR/patterns/review.json')
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+
     @app.get('/services/{service_id}', include_in_schema=False)
     async def service_detail(request: Request, service_id: str):
         try:

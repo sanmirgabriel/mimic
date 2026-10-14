@@ -191,6 +191,8 @@ def main(argv: list[str] | None = None) -> int:
         Exit code: 0 success, 1 input error, 2 I/O error.
     """
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "patterns":
+        return _patterns_command(argv[1:])
     if argv and argv[0] in ("services", "credentials"):
         return _catalog_command(argv[0], argv[1:])
     if argv and argv[0] == 'packs':
@@ -617,6 +619,67 @@ def _catalog_command(kind: str, argv: list[str]) -> int:
         return 1
     except OSError as exc:
         print(f"Cannot export catalog: {exc}", file=sys.stderr)
+        return 2
+
+
+def _patterns_command(argv: list[str]) -> int:
+    """Sensitive input is read separately from generation, logging and Jobs."""
+    from mimic.application.observations import (
+        ObservationError, ObservationLimits, PatternAnalysisService, load_report_file, report_bytes, save_report,
+    )
+
+    class PrivateParser(argparse.ArgumentParser):
+        def error(self, message):
+            # argparse normally echoes invalid values, which may be sensitive.
+            self.exit(2, "Invalid pattern-analysis arguments; use --help.\n")
+
+    parser = PrivateParser(prog="mimic patterns")
+    commands = parser.add_subparsers(dest="command", required=True)
+    analyze = commands.add_parser("analyze", help="Analyze authorized local observations; aggregate JSON only.")
+    analyze.add_argument("--input", required=True, metavar="FILE", help="Local UTF-8 file, or - for explicit binary stdin.")
+    analyze.add_argument("--authorized", action="store_true", help="Confirm authorization to analyze this material.")
+    analyze.add_argument("--source-label", default="local-observations", help="Non-sensitive identifier; never a path or password.")
+    analyze.add_argument("--max-bytes", type=int, default=64 * 1024 * 1024)
+    analyze.add_argument("--max-lines", type=int, default=100_000)
+    analyze.add_argument("--max-line-bytes", type=int, default=1024)
+    analyze.add_argument("--reference-year", type=int, help="Recognize years from 1900 through this explicit year (default: fixed 1900-2099).")
+    analyze.add_argument("--min-occurrences", type=int, default=5, help="Minimum count for publishing a structure (default: 5).")
+    analyze.add_argument("--output", "-o", help="Publish aggregate JSON atomically; existing files are refused.")
+    show = commands.add_parser("show", help="Validate and display an aggregate artifact; never run generation.")
+    show.add_argument("artifact", metavar="FILE")
+    parse_failed = False
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as exc:
+        if exc.code != 2:
+            raise
+        parse_failed = True
+    if parse_failed:
+        # Raise after argparse's handler has exited, without its private values
+        # attached as exception context. The parser printed only a fixed error.
+        raise SystemExit(2)
+    try:
+        if args.command == "show":
+            print(report_bytes(load_report_file(args.artifact)).decode("ascii"), end="")
+            return 0
+        limits = ObservationLimits(args.max_bytes, args.max_lines, args.max_line_bytes)
+        service = PatternAnalysisService()
+        options = dict(authorized=args.authorized, source_label=args.source_label, limits=limits,
+                       reference_year=args.reference_year, min_occurrences=args.min_occurrences)
+        if args.input == "-":
+            report = service.analyze(getattr(sys.stdin, "buffer", None), **options)
+        else:
+            report = service.analyze_file(args.input, **options)
+        if args.output:
+            save_report(report, args.output)
+        else:
+            print(report_bytes(report).decode("ascii"), end="")
+        return 0
+    except ObservationError as exc:
+        print(f"{exc.code}: {exc}", file=sys.stderr)
+        return 2 if exc.code in ("read_failed", "not_regular_file", "write_failed") else 1
+    except OSError:
+        print("Cannot write the aggregate observation report.", file=sys.stderr)
         return 2
 
 
