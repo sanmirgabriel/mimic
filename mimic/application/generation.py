@@ -37,6 +37,7 @@ from mimic.intelligence.organization import plan_organization_names, Organizatio
 from mimic.ranking import GenerationResult, RankingOptions, SCORE_VERSION
 from mimic.ranking.scoring import score_candidate
 from mimic.ranking.topk import select_top_k
+from mimic.ranking.diverse import select_diverse
 from mimic.packs import PackRegistry
 
 
@@ -87,11 +88,15 @@ class GenerationPlanSummary:
     organization_variants: bool = False
     organization_variant_seed_count: int = 0
     organization_variant_limited_names: int = 0
+    preset: str | None = None
 
     def to_dict(self) -> dict:
         from dataclasses import asdict
 
         data = asdict(self)
+        data["ranking"] = self.ranking.to_dict()
+        if self.preset is None:
+            del data["preset"]
         data["mutators"] = list(self.mutators)
         if not self.packs:
             del data['packs']
@@ -179,7 +184,8 @@ class PreparedGeneration:
         """
         candidates = self._claim_candidates(checkpoint)
         if self._ranking.enabled:
-            return select_top_k(candidates, self._ranking.budget,
+            selector = select_diverse if self._ranking.selector == "diverse-v1" else select_top_k
+            return selector(candidates, self._ranking.budget,
                                 lambda candidate: score_candidate(candidate, self._reference_year))
         return (GenerationResult(candidate) for candidate in candidates)
 
@@ -383,6 +389,7 @@ class GenerationService:
         if request.mutations.combine:
             mutators.append("combine")
         return GenerationPlanSummary(
+            preset=request.preset,
             organization_variants=request.organization_variants,
             organization_variant_seed_count=len(names.candidates),
             organization_variant_limited_names=names.limited_names,

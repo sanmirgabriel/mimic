@@ -230,6 +230,8 @@ class JobManager:
                                         "score_version": result.score.version if result.score else None,
                                         "score_components": [asdict(x) for x in result.score.components]
                                             if result.score else None})
+                        if result.selection is not None:
+                            preview[-1]["selection"] = asdict(result.selection)
                     if count % self.count_batch == 0:
                         self.repository.set_count(job_id, count)
             self.repository.set_evaluated_count(job_id, prepared.evaluated_count)

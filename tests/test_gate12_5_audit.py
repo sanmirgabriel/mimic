@@ -342,6 +342,8 @@ def test_api_old_false_true_payloads_and_candidate_preview(tmp_path):
 
 
 def test_catalog_584_keys_and_every_placeholder_set_remains_identical():
-    a,b=TRANSLATIONS['pt-BR'],TRANSLATIONS['en'];assert len(a)==len(b)==584 and a.keys()==b.keys()
+    # Block 12.6 adds 18 localized preset/selection messages; retain exact
+    # cardinality and the original all-key/all-placeholder parity assertion.
+    a,b=TRANSLATIONS['pt-BR'],TRANSLATIONS['en'];assert len(a)==len(b)==602 and a.keys()==b.keys()
     fields=lambda value:{field for _,field,_,_ in Formatter().parse(value) if field is not None}
     assert all(fields(a[key])==fields(b[key]) and a[key].strip() and b[key].strip() for key in a)

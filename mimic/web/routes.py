@@ -33,7 +33,7 @@ from mimic.packs import PackError, PackRegistry
 from mimic.domain.context import KeyValueContextExtractor
 from mimic.domain.models import Organization, Target
 from mimic.profile.schema import TargetProfile
-from mimic.persistence.repository import StorageConflict
+from mimic.persistence.repository import StorageConflict, InvalidSelectionExplanation
 from mimic.web.uploads import UploadStore, MAX_UPLOAD_BYTES
 from mimic.web.security import BrowserHeaders, secure_headers
 from mimic.web.i18n import (LOCALES, LOCALE_COOKIE, TRANSLATIONS, Message, WebInputError,
@@ -87,6 +87,8 @@ async def _call(operation, *args):
         return await run_in_threadpool(operation, *args)
     except PackError:
         raise
+    except InvalidSelectionExplanation as exc:
+        raise WebError(409, Message("error.invalid", detail="invalid selection explanation")) from exc
     except StorageConflict as exc:
         raise WebError(409, _message(409, str(exc))) from exc
     except LookupError as exc:
@@ -476,6 +478,15 @@ def mount_web(app: FastAPI) -> None:
                        if priority == "custom" else RankingOptions.from_budget(priority))
         except (ValueError, TypeError) as exc:
             raise WebInputError("error.budget") from exc
+        try:
+            selector = values.get("selector", "score-v1")
+            if selector not in ("score-v1", "diverse-v1"):
+                raise ValueError("unknown selector")
+            if selector == "diverse-v1":
+                from dataclasses import replace
+                ranking = replace(ranking, selector=selector)
+        except (ValueError, TypeError) as exc:
+            raise WebInputError("diversity.invalid") from exc
         result = GenerationRequest(ranking=ranking, target=target, organization=organization, context_facts=tuple(facts),
                                    organization_variants=values.get("organization_variants_form") == "1" and values.get("organization_variants") == "on",
                                    intelligence=intelligence,
@@ -492,6 +503,32 @@ def mount_web(app: FastAPI) -> None:
             raise PackError('snapshot', 'Too many selected packs')
         from dataclasses import replace
         result.sources = replace(result.sources, packs=tuple([await _call(packs.reference, identity) for identity in selected_packs]))
+        preset = values.get("preset", "")
+        preset_options = values.get("preset_options", "defaults")
+        if preset not in ("", "corporate-br-v1") or preset_options not in ("defaults", "custom"):
+            raise WebInputError("preset.invalid")
+        if preset:
+            data = result.to_dict()
+            data["preset"] = preset
+            if preset_options == "defaults":
+                for key in ("include_ptbr", "include_common_passwords", "common_passwords_version"):
+                    data["sources"].pop(key, None)
+                for key in ("enabled", "common_numbers", "recent_years", "corporate_roles"):
+                    data["intelligence"].pop(key, None)
+                data.pop("organization_variants", None)
+            else:
+                # Absence of a checkbox is an explicit False, even for preset defaults.
+                data["organization_variants"] = result.organization_variants
+                data["sources"]["include_common_passwords"] = result.sources.include_common_passwords
+            result = GenerationRequest.from_dict(data)
+            for key, enabled in (("organization_variants", result.organization_variants),
+                                 ("include_ptbr", result.sources.include_ptbr),
+                                 ("include_common_passwords", result.sources.include_common_passwords),
+                                 ("intelligence_enabled", result.intelligence.enabled),
+                                 ("common_numbers", result.intelligence.common_numbers),
+                                 ("recent_years", result.intelligence.recent_years),
+                                 ("corporate_roles", result.intelligence.corporate_roles)):
+                values[key] = "on" if enabled else ""
         result.validate()
         values["reference_year"] = str(result.intelligence.reference_year or "")
         return result, target_id

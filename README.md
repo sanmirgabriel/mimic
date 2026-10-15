@@ -238,3 +238,29 @@ pytest -v
 ## Licença
 
 MIT
+### Corporate BR sources and experimental family selection
+
+For a Brazilian corporate audit, explicitly combine the existing sources:
+
+```bash
+mimic generate --organization 'Acme Corp Brasil' --preset corporate-br \
+  --reference-year 2026 --budget exhaustive --output wordlist.txt
+```
+
+`corporate-br-v1` enables organization variants, Password Intelligence, common
+numbers, four recent years, mutable PT-BR vocabulary and independent ready weak
+values. It uses only explicitly selected services. Explicit switches such as
+`--no-ptbr`, `--no-intelligence`, `--no-common-numbers`, `--no-recent-years`,
+`--no-corporate-roles`, `--no-include-common-passwords` and
+`--no-organization-variants` override these defaults. CLI logs the resolved sources;
+Web preview and API/Job snapshots expose them. No preset is inferred for old inputs.
+
+Selection is independent of sources. Add `--budget quick --selector diverse-v1`
+to reserve a best representative per causal family and fill by the original score.
+The default stays score-v1; diverse-v1 requires a finite budget and remains
+experimental. It can displace higher-scoring entries and does not guarantee a
+particular password. Both modes scan the full accepted stream. Combining sources
+increases work even for Quick; caps, full Leet and Policy can prevent coverage.
+
+See [Block 12.6](docs/BLOCK12_6_IMPLEMENTATION_REPORT.md) for evaluation,
+configuration precedence, exact compatibility and limitations.
