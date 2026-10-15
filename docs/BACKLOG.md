@@ -1,9 +1,9 @@
 # MIMIC product backlog
 
-Canonical product backlog and delivery direction, updated 2026-10-14. Blocks
+Canonical product backlog and delivery direction, updated 2026-10-15. Blocks
 7–12 are merged in `main` (Block 11: PR #14; Block 12: [PR #15](https://github.com/sanmirgabriel/mimic/pull/15),
 merge `6398108f8699cd24068d06d39cf964671bab8354`). PR #15 CI passed on
-Python 3.10/3.11/3.12. **Gate 12.5 completed locally; ready for operator commit review.**
+Python 3.10/3.11/3.12. **Block 12.5 merged by [PR #16](https://github.com/sanmirgabriel/mimic/pull/16), base `a0a10f19019957ec7509644a583e6f8d097d3cfd`. Block 12.6 Gate completed locally; ready for operator commit review.**
 Older audit notes below record their pre-merge state; this table is the current
 source of truth for delivery status. No Block 13 implementation has started.
 
@@ -17,7 +17,8 @@ source of truth for delivery status. No Block 13 implementation has started.
 | 10 | Service Intelligence + Default Credential Catalog ✅ | Seven service profiles, source-qualified default pairs, separate common values, local lookup/export, opt-in ready candidates. |
 | 11 | Observed Password Pattern Learning ✅ (merged PR #14) | Bounded local authorized analysis, versioned aggregate artifacts, CLI analyze/show, read-only Web lookup and explicit structural filtering through the existing engine. |
 | 12 | Password Popularity / Frequency ✅ (merged PR #15) | Versioned empirical pattern frequencies, with representativeness, licensing and transparent evidence. |
-| 12.5 | Organization Name Intelligence (implemented; Gate 12.5 ready for commit review) | Bounded compound company/name/alias seeds, component casing and initials through the existing engine; explicit frozen request switch and historical opt-out. |
+| 12.5 | Organization Name Intelligence ✅ (merged PR #16) | Bounded compound company/name/alias seeds, component casing and initials through the existing engine; explicit frozen request switch and historical opt-out. |
+| 12.6 | Corporate BR Coverage & Family Diversity (Gate completed locally; ready for commit review) | Transparent corporate-br-v1 source resolution and experimental, independent diverse-v1 selection; fixed causal families, bounded retention and synthetic offline evaluation. |
 | 13 | Hashcat Convergence | Differentially verified, honest rule/base exports aligned with supported existing transformations. |
 | 14 | Service Catalog Expansion | Grow reviewed technology/default-credential knowledge with sources, applicability and versions. |
 | 15 | Offline Password Quality Audit | Local analysis of authorized password-quality samples, policy compliance, weak patterns and aggregated reuse. |
@@ -435,3 +436,28 @@ The product is **usable now** as a local candidate generator and passive service
 - **Avoid combinatorial explosion:** small primitives/templates and per-word caps.
 - **Local-first:** data and generation stay in the operator's workspace.
 - **No active attack execution:** no remote authentication, spraying or brute force.
+
+## Block 12.6 — Corporate BR Coverage & Family Diversity (current)
+
+- Opt-in `corporate-br-v1` resolves existing organization/Intelligence/PT-BR/ready
+  sources, preserves explicit overrides and freezes resolved options in requests.
+- Independent experimental `diverse-v1` reserves each causal family's best
+  candidate, then fills by unchanged score-v1. Default outputs remain historical.
+- Fixed `candidate-family-v1` has 12 literal-free categories; retained metadata
+  explains family and reason without changing Origins/Transformations/scores.
+- Evaluation reports structural gains, 8 displaced baseline entries, known-target
+  misses, increased scan CPU/RSS and the limited independence of generic holdouts.
+  It does not establish empirical success probabilities or justify default rollout.
+- See [ADR 0012.6](adr/0012-6-corporate-br-family-diversity.md) and
+  [implementation report](BLOCK12_6_IMPLEMENTATION_REPORT.md). Blocks 13–21 above
+  keep their original scope; no work on those blocks is included.
+
+### Gate 12.6 outcome
+
+- Adversarial audit preserves the preset/classifier/selector and score-v1, while
+  correcting selection/envelope validation, corrupt-preview error handling,
+  malformed application option-section errors and CLI/Web prefix disclosure.
+- Exact historical outputs, Jobs, browser/i18n, offline distributions and
+  deterministic results are verified. Known coverage/concentration/recall-loss
+  limitations and variable performance remain explicit; diverse-v1 stays opt-in.
+- See [Gate 12.6 audit](GATE12_6_AUDIT.md). No commit, push, merge or Block 13 work.

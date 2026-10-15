@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 import json
 import logging
 import sys
@@ -64,6 +65,13 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--intelligence", action=argparse.BooleanOptionalAction, default=None,
                    help="Password Intelligence (default on for generate; off for legacy invocation).")
     p.add_argument("--reference-year", type=int, help="Freeze recent-year knowledge at this year.")
+    p.add_argument("--preset", choices=("corporate-br", "corporate-br-v1"),
+                   help="Source defaults: organization variants, Intelligence, common numbers, recent years, PT-BR and ready weak values. Explicit switches win; no services are added.")
+    p.add_argument("--selector", choices=("score-v1", "diverse-v1"), default="score-v1",
+                   help="Selection independent of sources; diverse-v1 is experimental and requires a finite budget. "
+                   "Budget prefixes need not nest: the first 100 of a 1000-result diverse list can differ from a 100-result run.")
+    for option in ("common-numbers", "recent-years", "corporate-roles"):
+        p.add_argument("--" + option, action=argparse.BooleanOptionalAction, default=None)
     p.add_argument("--budget", type=RankingOptions.from_budget, default=RankingOptions(),
                    metavar="PRESET|N", help="Output priority: quick=100, focused=1000, balanced=10000, "
                    "large=100000, exhaustive (default), or a positive integer. Finite budgets rank "
@@ -74,8 +82,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument('--pack', action='append', default=[], metavar='ID@VERSION', help='Local digest-pinned pack (repeatable).')
     p.add_argument('--data-dir', help='MIMIC data directory used to resolve local packs.')
     p.add_argument("--max-dataset-lines", type=int, default=DEFAULT_MAX_LINES)
-    p.add_argument("--ptbr", action="store_true", help="Include small built-in PT-BR seed sets.")
-    p.add_argument("--include-common-passwords", action="store_true",
+    p.add_argument("--ptbr", action=argparse.BooleanOptionalAction, default=None, help="Include small built-in PT-BR seed sets.")
+    p.add_argument("--include-common-passwords", action=argparse.BooleanOptionalAction, default=None,
                    help="Opt in to independent common weak passwords as ready, non-combinable candidates.")
     p.add_argument(
         "--numbers",
@@ -232,6 +240,22 @@ def main(argv: list[str] | None = None) -> int:
         argv = argv[1:]
     parser = _build_parser()
     args = parser.parse_args(argv)
+    if args.selector == "diverse-v1":
+        try:
+            args.budget = replace(args.budget, selector=args.selector)
+        except ValueError as exc:
+            parser.error(str(exc))
+    if args.preset:
+        if args.ptbr is None:
+            args.ptbr = True
+        if args.include_common_passwords is None:
+            args.include_common_passwords = True
+        if args.intelligence is None:
+            args.intelligence = True
+        if args.organization_variants is None:
+            args.organization_variants = True
+    args.ptbr = bool(args.ptbr)
+    args.include_common_passwords = bool(args.include_common_passwords)
 
     # Show banner in interactive mode (unless suppressed).
     if not args.quiet and not args.no_banner:
@@ -372,12 +396,16 @@ def main(argv: list[str] | None = None) -> int:
         logger.error('Cannot resolve pack: %s', exc)
         return 1
     request = GenerationRequest(
+        preset=args.preset,
         organization_variants=modern if args.organization_variants is None else args.organization_variants,
         ranking=args.budget,
         target=Target(profile.nome or "", profile) if profile is not None else None,
         organization=Organization(args.organization) if args.organization else None,
         intelligence=IntelligenceOptions(
             enabled=modern if args.intelligence is None else args.intelligence,
+            common_numbers=True if args.common_numbers is None else args.common_numbers,
+            recent_years=True if args.recent_years is None else args.recent_years,
+            corporate_roles=True if args.corporate_roles is None else args.corporate_roles,
             service_profiles=tuple(args.service), reference_year=args.reference_year,
         ),
         base_candidates=tuple(base_candidates),
@@ -409,6 +437,12 @@ def main(argv: list[str] | None = None) -> int:
     except (ApplicationError, ValueError, OSError) as exc:
         logger.error("Invalid generation configuration: %s", exc)
         return 1
+    if request.preset:
+        logger.info("Preset %s resolved: organization_variants=%s intelligence=%s common_numbers=%s recent_years=%s corporate_roles=%s ptbr=%s ready_common=%s services=%s",
+                    request.preset, request.organization_variants, request.intelligence.enabled,
+                    request.intelligence.common_numbers, request.intelligence.recent_years,
+                    request.intelligence.corporate_roles, request.sources.include_ptbr,
+                    request.sources.include_common_passwords, request.intelligence.service_profiles)
     # Pack executions publish a file only after every source has finished intact.
     staged_output = None
     if packs and args.output:
@@ -527,6 +561,9 @@ def _trace_results(results: Iterator[GenerationResult]) -> Iterator[str]:
         if result.score is not None:
             logger.debug("rank=%d score=%d model=%s components=%s", result.rank, result.score.total,
                          result.score.version, json.dumps(result.score.to_dict()["components"], ensure_ascii=False))
+        if result.selection is not None:
+            logger.debug("selection=%s family=%s family_version=%s reason=%s", result.selection.selector,
+                         result.selection.family, result.selection.family_version, result.selection.reason)
         yield from _trace(iter((result.candidate,)))
 
 

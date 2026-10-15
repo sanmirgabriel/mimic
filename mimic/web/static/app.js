@@ -84,6 +84,23 @@ if (prioritySelect) {
   });
 }
 
+const sourcePreset = document.querySelector('[name="preset"]');
+if (sourcePreset) {
+  const sourceControls = ["organization_variants", "intelligence_enabled", "common_numbers",
+    "recent_years", "corporate_roles", "include_ptbr", "include_common_passwords"];
+  const sourceConfiguration = sourcePreset.form.elements.preset_options;
+  sourcePreset.addEventListener("change", () => {
+    if (sourcePreset.value !== "corporate-br-v1") return;
+    sourceControls.forEach(name => { sourcePreset.form.elements[name].checked = true; });
+    sourceConfiguration.value = "defaults";
+  });
+  sourceControls.forEach(name => {
+    sourcePreset.form.elements[name].addEventListener("change", () => {
+      if (sourcePreset.value) sourceConfiguration.value = "custom";
+    });
+  });
+}
+
 const themeToggle = document.querySelector("[data-theme-toggle]");
 function updateThemeToggle() {
   if (!themeToggle) return;

@@ -18,7 +18,7 @@ from mimic.api.schemas import (
 from mimic.application import ApplicationError, GenerationRequest
 from mimic.jobs import JobManager
 from mimic.persistence import DataPaths, Database, Repository
-from mimic.persistence.repository import StorageConflict
+from mimic.persistence.repository import StorageConflict, InvalidSelectionExplanation
 from mimic.persistence.records import RecordService
 
 
@@ -177,7 +177,10 @@ def create_app(data_dir: str | Path | None = None, database_path: str | Path | N
                    offset: int = Query(0, ge=0)):
         job_id = str(job_id)
         _required(repo.get_job(job_id))
-        return repo.list_preview(job_id, limit, offset)
+        try:
+            return repo.list_preview(job_id, limit, offset)
+        except InvalidSelectionExplanation as exc:
+            raise HTTPException(409, "invalid selection explanation") from exc
 
     @app.get("/api/jobs/{job_id}/download")
     def download(job_id: UUID):

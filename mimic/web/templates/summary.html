@@ -22,3 +22,6 @@
 {% endif %}
 
 {% if summary and summary.get('common_password_count') %}<div class="summary-section"><h3>{{ t('catalog.common_passwords') }}</h3><p>{{ t('catalog.common_count', count=summary.common_password_count) }}</p><small>{{ summary.common_passwords_version }}</small></div>{% endif %}
+
+{% if summary and summary.get('preset') %}<div class="summary-section"><h3>{{ t('preset.label') }}</h3><p>{{ summary.preset }}</p></div>{% endif %}
+{% if summary and summary.ranking.get('selector') %}<div class="summary-section"><h3>{{ t('diversity.label') }}</h3><p>{{ summary.ranking.selector }} · {{ summary.ranking.family_version }}</p><small>{{ t('diversity.help') }}</small></div>{% endif %}

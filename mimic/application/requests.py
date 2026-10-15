@@ -28,8 +28,10 @@ from mimic.intelligence import IntelligenceOptions
 from mimic.ranking import RankingOptions
 from mimic.intelligence.builtins import get_service_profile
 from mimic.packs.models import PackReference, PackError
+from mimic.application.presets import CORPORATE_BR_VERSION, resolve_preset
 
 LEET_MODES = ("none", "partial", "full")
+_UNSET = object()
 
 
 @dataclass(frozen=True)
@@ -229,15 +231,29 @@ class GenerationRequest:
     number_candidates: tuple[Candidate, ...] = ()
     context_facts: tuple[ExtractedFact, ...] = ()
     context_path: str | None = None
-    sources: SourceOptions = field(default_factory=SourceOptions)
+    sources: SourceOptions = _UNSET
     mutations: MutationOptions = field(default_factory=MutationOptions)
     policy: PolicyOptions = field(default_factory=PolicyOptions)
     limits: GenerationLimits = field(default_factory=GenerationLimits)
-    intelligence: IntelligenceOptions = field(default_factory=lambda: IntelligenceOptions(enabled=False))
+    intelligence: IntelligenceOptions = _UNSET
     ranking: RankingOptions = field(default_factory=RankingOptions)
-    organization_variants: bool = False
+    organization_variants: bool = _UNSET
+    preset: str | None = None
 
     def __post_init__(self) -> None:
+        # Direct callers may omit entire option objects. Supplied objects are
+        # explicit; from_dict additionally resolves individual missing fields.
+        if self.preset is not None:
+            if self.preset not in ("corporate-br", CORPORATE_BR_VERSION):
+                raise InvalidGenerationRequest("unknown generation preset")
+            self.preset = CORPORATE_BR_VERSION
+        if self.sources is _UNSET:
+            self.sources = SourceOptions(include_ptbr=bool(self.preset),
+                                         include_common_passwords=bool(self.preset))
+        if self.intelligence is _UNSET:
+            self.intelligence = IntelligenceOptions(enabled=bool(self.preset))
+        if self.organization_variants is _UNSET:
+            self.organization_variants = bool(self.preset)
         self.base_candidates = tuple(self.base_candidates)
         self.isolated_candidates = tuple(self.isolated_candidates)
         self.number_candidates = tuple(self.number_candidates)
@@ -254,6 +270,8 @@ class GenerationRequest:
             raise InvalidGenerationRequest("organization must be an Organization or None")
         if type(self.organization_variants) is not bool:
             raise InvalidGenerationRequest("organization_variants must be a boolean")
+        if self.preset is not None and self.preset != CORPORATE_BR_VERSION:
+            raise InvalidGenerationRequest("unknown generation preset")
         for name, value, expected in (
             ("sources", self.sources, SourceOptions),
             ("mutations", self.mutations, MutationOptions),
@@ -349,6 +367,13 @@ class GenerationRequest:
         # Absence is the frozen historical/off contract, not an adapter default.
         if self.organization_variants:
             data["organization_variants"] = True
+        elif self.preset is not None:
+            data["organization_variants"] = False  # Explicit preset opt-out must survive replay.
+        if self.preset is not None:
+            data["preset"] = self.preset
+            # SourceOptions omits historical False values; here absence would
+            # reactivate a preset default on snapshot restoration.
+            data["sources"]["include_common_passwords"] = self.sources.include_common_passwords
         return data
 
     @classmethod
@@ -357,7 +382,9 @@ class GenerationRequest:
         if not isinstance(data, dict):
             raise InvalidGenerationRequest("request payload must be a mapping")
         try:
+            data = resolve_preset(data)
             request = cls(
+                preset=data.get("preset"),
                 target=_target_from_dict(data.get("target")),
                 organization=(
                     Organization(**data["organization"])
@@ -384,7 +411,7 @@ class GenerationRequest:
                 ranking=RankingOptions.from_dict(data.get("ranking", {})),
                 organization_variants=data.get("organization_variants", False),
             )
-        except (KeyError, TypeError, ValueError) as exc:
+        except (AttributeError, KeyError, TypeError, ValueError) as exc:
             raise InvalidGenerationRequest(f"malformed request payload: {exc}") from exc
         request.validate()
         return request

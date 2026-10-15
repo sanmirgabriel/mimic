@@ -11,6 +11,7 @@ from uuid import uuid4
 from mimic.domain.models import Organization, Target
 from mimic.persistence.database import Database
 from mimic.profile.schema import TargetProfile
+from mimic.ranking.models import Selection
 
 
 def utc_now() -> str:
@@ -19,6 +20,26 @@ def utc_now() -> str:
 
 class StorageConflict(Exception):
     """A referenced row cannot be removed or a foreign key is invalid."""
+
+
+class InvalidSelectionExplanation(ValueError):
+    """Unsupported/corrupt experimental metadata; never echo persisted inputs."""
+
+
+def _selection_explanation(data: dict) -> dict:
+    try:
+        if set(data) != {"components", "selection"} or not isinstance(data["components"], list):
+            raise ValueError
+        selection = Selection.from_dict(data["selection"])
+        for component in data["components"]:
+            if (not isinstance(component, dict) or set(component) != {"code", "delta", "description"}
+                    or type(component["delta"]) is not int
+                    or not isinstance(component["code"], str)
+                    or not isinstance(component["description"], str)):
+                raise ValueError
+        return {"components": data["components"], "selection": asdict(selection)}
+    except (KeyError, TypeError, ValueError) as exc:
+        raise InvalidSelectionExplanation("invalid selection explanation") from exc
 
 
 class Repository:
@@ -41,7 +62,16 @@ class Repository:
         elif table == "candidate_preview":
             item["origins"] = json.loads(item.pop("origins_json"))
             item["transformations"] = json.loads(item.pop("transformations_json"))
-            item["score_components"] = json.loads(item["score_components"]) if item["score_components"] is not None else None
+            try:
+                item["score_components"] = json.loads(item["score_components"]) if item["score_components"] is not None else None
+            except (TypeError, ValueError) as exc:
+                raise InvalidSelectionExplanation("invalid selection explanation") from exc
+            if item["score_components"] is not None and not isinstance(item["score_components"], (list, dict)):
+                raise InvalidSelectionExplanation("invalid selection explanation")
+            if isinstance(item["score_components"], dict):
+                explanation = _selection_explanation(item["score_components"])
+                item["score_components"] = explanation["components"]
+                item["selection"] = explanation["selection"]
         return item
 
     def _get(self, table: str, item_id: str) -> dict | None:
@@ -252,6 +282,11 @@ class Repository:
     def add_preview(self, item_id: str, candidates: list[dict]) -> None:
         if not candidates:
             return
+        def explanation(candidate):
+            components = candidate.get("score_components")
+            if candidate.get("selection") is not None:
+                return _selection_explanation({"components": components, "selection": candidate["selection"]})
+            return components
         with self.database.connection() as connection:
             connection.executemany(
                 "INSERT INTO candidate_preview "
@@ -260,7 +295,7 @@ class Repository:
                 [(item_id, c["sequence"], c["value"],
                   json.dumps(c["origins"], ensure_ascii=False),
                   json.dumps(c["transformations"], ensure_ascii=False), c.get("rank"), c.get("score"),
-                  c.get("score_version"), json.dumps(c["score_components"], ensure_ascii=False)
+                  c.get("score_version"), json.dumps(explanation(c), ensure_ascii=False)
                   if c.get("score_components") is not None else None) for c in candidates],
             )
 
