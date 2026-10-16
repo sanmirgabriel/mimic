@@ -11,6 +11,7 @@ from collections.abc import Iterator
 from pathlib import Path
 import os
 import tempfile
+import sqlite3
 
 from mimic.application import (
     ApplicationError,
@@ -122,6 +123,12 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help="Export a hashcat .rule file instead of a wordlist.",
     )
+    p.add_argument("--hashcat-bundle", metavar="NEW_DIRECTORY",
+                   help="Export paired bases/rules/manifest from actual MIMIC output. Earlier transforms are materialized; no implicit Hashcat execution.")
+    p.add_argument("--hashcat-verify", action="store_true",
+                   help="Explicitly verify the bundle with local Hashcat 6.2.6 --stdout only; never hashes.")
+    p.add_argument("--hashcat-allow-partial", action="store_true",
+                   help="Allow declared omissions of controls/invalid Unicode/values exceeding 128 UTF-8 bytes; otherwise fail closed.")
     p.add_argument(
         "--year-range",
         metavar="START:END",
@@ -240,6 +247,12 @@ def main(argv: list[str] | None = None) -> int:
         argv = argv[1:]
     parser = _build_parser()
     args = parser.parse_args(argv)
+    if args.hashcat_bundle == "":
+        parser.error("--hashcat-bundle requires a nonempty directory")
+    if args.hashcat_bundle and (args.export_rules or args.output):
+        parser.error("--hashcat-bundle cannot be combined with --export-rules or --output")
+    if (args.hashcat_verify or args.hashcat_allow_partial) and not args.hashcat_bundle:
+        parser.error("--hashcat-verify/--hashcat-allow-partial require --hashcat-bundle")
     if args.selector == "diverse-v1":
         try:
             args.budget = replace(args.budget, selector=args.selector)
@@ -432,6 +445,27 @@ def main(argv: list[str] | None = None) -> int:
             max_dataset_lines=args.max_dataset_lines,
         ),
     )
+    if args.hashcat_bundle:
+        from mimic.rules.bundle import BundleError, export_bundle
+        try:
+            manifest = export_bundle(request, args.hashcat_bundle, service=GenerationService(registry),
+                                     allow_partial=args.hashcat_allow_partial, verify=args.hashcat_verify)
+        except BundleError as exc:
+            logger.error("Hashcat bundle incompatibility: %s", exc)
+            return 3
+        except ApplicationError:
+            logger.error("Invalid generation request for Hashcat bundle")
+            return 1
+        except (ValueError, TypeError):
+            logger.error("Invalid source input for Hashcat bundle")
+            return 1
+        except (OSError, sqlite3.Error):
+            logger.error("Hashcat bundle I/O or publication failed")
+            return 2
+        logger.info("Hashcat bundle: %s; coverage=%s; exported=%d/%d; segments=%d; verification=%s; order/rank/provenance are not preserved",
+                    manifest['mode'], manifest['equivalence']['coverage'], manifest['counts']['exported'],
+                    manifest['counts']['retained'], len(manifest['segments']), manifest['equivalence']['differential']['status'])
+        return 0
     try:
         prepared = GenerationService(registry).prepare(request)
     except (ApplicationError, ValueError, OSError) as exc:

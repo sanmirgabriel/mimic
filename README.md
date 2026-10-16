@@ -121,15 +121,58 @@ mimic --names names.txt \
   --output wordlist.txt
 ```
 
-### Exportando regras hashcat
+### Exportando material pareado para Hashcat
 
-Em vez de expandir a wordlist inteira localmente, exporta a lógica de
-transformação como arquivo `.rule`, pra crackear com aceleração de GPU:
+A exportação nova usa a saída real da engine MIMIC para associar bases e regras:
 
 ```bash
-mimic --names names.txt --year-range 2020:2026 --export-rules mutations.rule
-hashcat -m 0 -r mutations.rule hashes.txt base_words.txt
+mimic generate --organization 'Acme Corp Brasil' --reference-year 2026 \
+  --leet none --hashcat-bundle /tmp/acme-hashcat
 ```
+
+O diretório deve ser novo, com pai existente, sem symlinks. O formato inicial
+usa publicação atômica Linux. Cada `segment-NNN.bases.txt` deve ser aplicado
+**somente** ao respectivo `segment-NNN.rule`; cruzar ou empilhar segmentos pode
+criar candidatas extras. Consulte `manifest.json` para a lista e os digests.
+
+```bash
+hashcat --stdout -r /tmp/acme-hashcat/segment-001.rule \
+  /tmp/acme-hashcat/segment-001.bases.txt
+```
+
+Repita para cada segmento listado. Não são necessários hashes. Para comparar
+explicitamente todos os segmentos com a referência MIMIC antes da publicação:
+
+```bash
+mimic generate -n 'Synthetic Aa' --no-intelligence --leet partial \
+  --hashcat-bundle /tmp/synthetic-hashcat --hashcat-verify
+```
+
+A verificação opcional usa Hashcat **6.2.6**, somente `--stdout`; a geração normal
+não chama nem exige Hashcat. Sem ela, o manifest registra equivalência externa
+**não verificada**. O bundle materializa Case/title, Leet, Unicode, estruturas e
+Reverse com a semântica Python; compila afixos observados com no máximo 31
+operações. Policy, caps, dedup e eventual seleção já foram aplicados pelo MIMIC.
+A equivalência declarada é de valores UTF-8 para aquela execução, sem preservar
+ordem, rank, score, encounter ou proveniência por candidata.
+
+A verificação exige pelo menos uma candidata exportada; um conjunto vazio não
+recebe selo de verificação após apenas consultar a versão. A execução externa
+tem timeout e limites de saída, com encerramento do processo em caso de falha.
+
+O perfil conservador limita valores a 128 bytes UTF-8 e rejeita controles,
+separadores Unicode de linha/parágrafo e Unicode inválido. `--hashcat-allow-partial`
+permite omissões contadas, sempre identificadas como parciais. Regras incompatíveis
+podem virar valores literais; um bundle `literal-identity-only` não representa
+convergência efetiva nem compressão útil. O exportador ainda executa a geração
+MIMIC completa e usa spool em disco; menos bytes não demonstram maior throughput.
+Os arquivos-base usam `$HEX[...]` do Hashcat para preservar bytes literalmente:
+mantenha autohex habilitado. Essa representação não é criptografia.
+
+`--export-rules mutations.rule` permanece disponível com seus bytes históricos.
+Esse formato legado produz um vocabulário isolado de regras: **não** reproduz
+universalmente composição, partial Leet, Python title/Unicode, caps ou Policy.
+Veja a [matriz de compatibilidade e medições](docs/BLOCK13_IMPLEMENTATION_REPORT.md).
 
 ## Referência da CLI
 

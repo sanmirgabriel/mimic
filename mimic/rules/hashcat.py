@@ -1,4 +1,4 @@
-"""Export mutations as hashcat .rule files instead of expanded wordlists."""
+"""Legacy standalone rule vocabulary; not equivalent to the composed pipeline."""
 
 from __future__ import annotations
 
@@ -30,9 +30,10 @@ def export_rules(
 ) -> int:
     """Write a hashcat-compatible .rule file.
 
-    The generated rules replicate the same transformations that Mimic
-    applies internally, allowing users to pair a small base wordlist with
-    hashcat's rule engine for GPU-accelerated cracking.
+    This historical format is preserved byte-for-byte. Independent rule lines
+    do not reproduce MIMIC's composed stages, positional partial Leet, Python
+    title/Unicode, frontier caps or Policy. Use the explicit paired bundle for
+    observed-output export with a declared compatibility contract.
 
     Args:
         numbers: Numeric suffixes/prefixes (years, PINs, etc.).
