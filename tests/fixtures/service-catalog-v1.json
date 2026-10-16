@@ -1,0 +1,283 @@
+{
+  "profiles": [
+    {
+      "id": "wordpress",
+      "display_name": "WordPress",
+      "tokens": [
+        "WordPress",
+        "wp"
+      ],
+      "roles": [
+        "admin",
+        "editor"
+      ],
+      "version": "knowledge-v1"
+    },
+    {
+      "id": "mysql",
+      "display_name": "MySQL",
+      "tokens": [
+        "mysql",
+        "sql",
+        "db"
+      ],
+      "roles": [
+        "root",
+        "dba"
+      ],
+      "version": "knowledge-v1"
+    },
+    {
+      "id": "postgresql",
+      "display_name": "PostgreSQL",
+      "tokens": [
+        "postgresql",
+        "postgres",
+        "db"
+      ],
+      "roles": [
+        "postgres",
+        "dba"
+      ],
+      "version": "knowledge-v1"
+    },
+    {
+      "id": "mssql",
+      "display_name": "Microsoft SQL Server",
+      "tokens": [
+        "mssql",
+        "sql",
+        "db"
+      ],
+      "roles": [
+        "sa",
+        "dba"
+      ],
+      "version": "knowledge-v1"
+    },
+    {
+      "id": "windows-ad",
+      "display_name": "Windows / Active Directory",
+      "tokens": [
+        "windows",
+        "AD"
+      ],
+      "roles": [
+        "administrator",
+        "svc"
+      ],
+      "version": "knowledge-v1"
+    },
+    {
+      "id": "grafana",
+      "display_name": "Grafana",
+      "tokens": [
+        "grafana"
+      ],
+      "roles": [
+        "admin",
+        "viewer"
+      ],
+      "version": "knowledge-v1"
+    },
+    {
+      "id": "rabbitmq",
+      "display_name": "RabbitMQ",
+      "tokens": [
+        "rabbitmq",
+        "amqp"
+      ],
+      "roles": [
+        "guest"
+      ],
+      "version": "knowledge-v1"
+    }
+  ],
+  "services": [
+    {
+      "id": "wordpress",
+      "display_name": "WordPress",
+      "description": "Content management system.",
+      "aliases": [
+        "wp"
+      ],
+      "references": [
+        [
+          "WordPress installation",
+          "https://developer.wordpress.org/advanced-administration/before-install/howto-install/"
+        ]
+      ],
+      "authentication_notes": "The installer asks you to choose an administrator username and password. No universal administrator pair is documented here.",
+      "catalog_version": "service-catalog-v1"
+    },
+    {
+      "id": "mysql",
+      "display_name": "MySQL",
+      "description": "Relational database server.",
+      "aliases": [
+        "mysql-server"
+      ],
+      "references": [
+        [
+          "MySQL initial account",
+          "https://dev.mysql.com/doc/refman/8.4/en/default-privileges.html"
+        ]
+      ],
+      "authentication_notes": "The initial administrative account is root. Password setup depends on initialization and packaging; no universal pair is cataloged.",
+      "catalog_version": "service-catalog-v1"
+    },
+    {
+      "id": "postgresql",
+      "display_name": "PostgreSQL",
+      "description": "Relational database server.",
+      "aliases": [
+        "postgres",
+        "pgsql"
+      ],
+      "references": [
+        [
+          "PostgreSQL authentication methods",
+          "https://www.postgresql.org/docs/current/auth-methods.html"
+        ],
+        [
+          "PostgreSQL initdb",
+          "https://www.postgresql.org/docs/current/app-initdb.html"
+        ]
+      ],
+      "authentication_notes": "postgres is an administrative installation convention, not a universal postgres/postgres pair. The bootstrap superuser defaults to the OS user running initdb; passwords and authentication methods depend on installation and pg_hba.conf.",
+      "catalog_version": "service-catalog-v1"
+    },
+    {
+      "id": "mssql",
+      "display_name": "Microsoft SQL Server",
+      "description": "Relational database platform.",
+      "aliases": [
+        "sql-server",
+        "sql server"
+      ],
+      "references": [
+        [
+          "SQL Server authentication modes",
+          "https://learn.microsoft.com/en-us/sql/relational-databases/security/choose-an-authentication-mode"
+        ]
+      ],
+      "authentication_notes": "Windows and mixed authentication modes differ. The sa account is a convention; its password is set during setup, and it is disabled with Windows authentication. No universal pair is cataloged.",
+      "catalog_version": "service-catalog-v1"
+    },
+    {
+      "id": "windows-ad",
+      "display_name": "Windows / Active Directory",
+      "description": "Windows directory and identity services.",
+      "aliases": [
+        "active directory",
+        "ad",
+        "windows"
+      ],
+      "references": [
+        [
+          "Active Directory accounts",
+          "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-default-user-accounts"
+        ]
+      ],
+      "authentication_notes": "Administrator and service-account names are contextual conventions, not documented password pairs. Authentication depends on domain configuration.",
+      "catalog_version": "service-catalog-v1"
+    },
+    {
+      "id": "grafana",
+      "display_name": "Grafana",
+      "description": "Observability and dashboard platform.",
+      "aliases": [
+        "grafana-server"
+      ],
+      "references": [
+        [
+          "Grafana first sign-in",
+          "https://grafana.com/docs/grafana/latest/setup-grafana/sign-in-to-grafana/"
+        ],
+        [
+          "Grafana roles and permissions",
+          "https://grafana.com/docs/grafana/latest/administration/roles-and-permissions/"
+        ]
+      ],
+      "authentication_notes": "Default initial sign-in uses admin/admin unless configured differently. The first successful sign-in prompts a password change.",
+      "catalog_version": "service-catalog-v1"
+    },
+    {
+      "id": "rabbitmq",
+      "display_name": "RabbitMQ",
+      "description": "Message broker using AMQP.",
+      "aliases": [
+        "rabbit mq",
+        "amqp"
+      ],
+      "references": [
+        [
+          "RabbitMQ access control",
+          "https://www.rabbitmq.com/docs/access-control"
+        ]
+      ],
+      "authentication_notes": "A blank broker normally creates guest/guest. guest is restricted to localhost by default; imported definitions on initial boot prevent this default user from being created.",
+      "catalog_version": "service-catalog-v1"
+    }
+  ],
+  "credentials": [
+    {
+      "id": "grafana-initial-admin",
+      "service_id": "grafana",
+      "username": "admin",
+      "password": "admin",
+      "source_title": "Grafana first sign-in",
+      "source_url": "https://grafana.com/docs/grafana/latest/setup-grafana/sign-in-to-grafana/",
+      "applicability": "Initial sign-in with default configuration.",
+      "restrictions": [
+        "Custom configuration can change the initial credentials.",
+        "The first successful sign-in prompts a password change; this pair does not describe subsequent logins."
+      ],
+      "catalog_version": "service-catalog-v1",
+      "record_version": "1",
+      "version_scope": null,
+      "type": "documented_default"
+    },
+    {
+      "id": "rabbitmq-initial-guest",
+      "service_id": "rabbitmq",
+      "username": "guest",
+      "password": "guest",
+      "source_title": "RabbitMQ access control",
+      "source_url": "https://www.rabbitmq.com/docs/access-control",
+      "applicability": "Initial database creation on a blank broker, with default user configuration and without boot-time definition import.",
+      "restrictions": [
+        "guest can connect only from localhost by default, regardless of protocol.",
+        "Importing definitions at initial boot prevents creation of this default user.",
+        "Configuration and administrator changes can alter or remove the account."
+      ],
+      "catalog_version": "service-catalog-v1",
+      "record_version": "1",
+      "version_scope": null,
+      "type": "documented_default"
+    }
+  ],
+  "common": {
+    "id": "common-credentials",
+    "version": "common-v1",
+    "description": "Conventional weak values, not prevalence statistics or associated credential pairs. Usernames and passwords are independent lists.",
+    "usernames": [
+      "admin",
+      "root",
+      "administrator",
+      "guest",
+      "support",
+      "test"
+    ],
+    "passwords": [
+      "admin",
+      "password",
+      "changeme",
+      "welcome",
+      "123456",
+      "mudar"
+    ],
+    "type": "common_value"
+  },
+  "csv": "service,username,password,type,source_url,applicability\ngrafana,admin,admin,documented_default,https://grafana.com/docs/grafana/latest/setup-grafana/sign-in-to-grafana/,Initial sign-in with default configuration. Custom configuration can change the initial credentials. The first successful sign-in prompts a password change; this pair does not describe subsequent logins.\nrabbitmq,guest,guest,documented_default,https://www.rabbitmq.com/docs/access-control,\"Initial database creation on a blank broker, with default user configuration and without boot-time definition import. guest can connect only from localhost by default, regardless of protocol. Importing definitions at initial boot prevents creation of this default user. Configuration and administrator changes can alter or remove the account.\"\n"
+}

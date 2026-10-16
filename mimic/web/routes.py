@@ -263,6 +263,7 @@ def mount_web(app: FastAPI) -> None:
             raise WebError(400, Message('error.invalid'))
         return render(request, 'services.html', title_key='catalog.title', nav='services',
                       services=catalog.list_services(q), query=q, category=category,
+                      catalog_version=catalog.CATALOG_VERSION,
                       selected_service=None, credentials=(), common=catalog.common_vocabulary())
 
     @app.get('/frequencies', include_in_schema=False)
@@ -313,6 +314,7 @@ def mount_web(app: FastAPI) -> None:
         profile = next(p for p in SERVICE_PROFILES if p.id == service.id)
         return render(request, 'services.html', title=service.display_name, nav='services',
                       services=catalog.list_services(), query='', category='services',
+                      catalog_version=catalog.CATALOG_VERSION,
                       selected_service=service, selected_profile=profile,
                       credentials=catalog.list_credentials(service.id), common=catalog.common_vocabulary())
 

@@ -146,7 +146,7 @@ def test_csv_formula_representation_preserves_canonical_value(prefix):
 
 
 def test_cli_search_and_errors_are_bounded_by_small_catalog(capsys):
-    for query, count in [('', 7), (' GrAfAnA ', 1), ('AMQP', 1), ('🐇', 0), ('x' * 10000, 0)]:
+    for query, count in [('', 13), (' GrAfAnA ', 1), ('AMQP', 1), ('🐇', 0), ('x' * 10000, 0)]:
         assert main(['services', 'list', '--search', query]) == 0
         assert len(capsys.readouterr().out.splitlines()) == count + 1
     assert main(['services', 'show', 'postgresql']) == 0
@@ -194,8 +194,8 @@ def test_old_profiles_and_repeated_multiple_service_selection():
 
 
 def test_documented_common_and_generated_categories_never_gain_associations(monkeypatch):
-    assert len(catalog.DEFAULT_CREDENTIALS) == 2
-    assert [(c.service_id, c.username, c.password, c.type) for c in catalog.DEFAULT_CREDENTIALS] == [
+    assert len(catalog.DEFAULT_CREDENTIALS_V1) == 2
+    assert [(c.service_id, c.username, c.password, c.type) for c in catalog.DEFAULT_CREDENTIALS_V1] == [
         ('grafana', 'admin', 'admin', 'documented_default'),
         ('rabbitmq', 'guest', 'guest', 'documented_default')]
     assert not any(c.password == 'grafana123' for c in catalog.DEFAULT_CREDENTIALS)
@@ -294,7 +294,7 @@ def test_web_empty_state_is_explicitly_scoped_to_catalog_and_errors_preserve_sel
 
 
 def test_two_concurrent_web_locales_and_all_catalog_placeholders(tmp_path):
-    assert len(TRANSLATIONS['pt-BR']) == len(TRANSLATIONS['en']) == 602  # 584 through Block 12.5 + 18 Block 12.6 labels.
+    assert len(TRANSLATIONS['pt-BR']) == len(TRANSLATIONS['en']) == 636  # Includes 34 Block 14 catalog labels.
     with TestClient(create_app(data_dir=tmp_path / 'pt')) as pt, TestClient(create_app(data_dir=tmp_path / 'en')) as en:
         pt.cookies.set('mimic_locale', 'pt-BR'); en.cookies.set('mimic_locale', 'en')
         def read(client): return client.get('/services/rabbitmq')

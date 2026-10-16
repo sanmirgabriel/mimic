@@ -3,9 +3,9 @@
 Canonical product backlog and delivery direction, updated 2026-10-16. Blocks
 7–12 are merged in `main` (Block 11: PR #14; Block 12: [PR #15](https://github.com/sanmirgabriel/mimic/pull/15),
 merge `6398108f8699cd24068d06d39cf964671bab8354`). PR #15 CI passed on
-Python 3.10/3.11/3.12. **Block 12.5 merged by [PR #16](https://github.com/sanmirgabriel/mimic/pull/16), base `a0a10f19019957ec7509644a583e6f8d097d3cfd`. Block 12.6 merged by [PR #17](https://github.com/sanmirgabriel/mimic/pull/17), base `6350d7c18053dbf3c915ca8cf71f0a3d12bd42ea`. Block 13 is current work.**
+Python 3.10/3.11/3.12. **Block 12.5 merged by [PR #16](https://github.com/sanmirgabriel/mimic/pull/16), base `a0a10f19019957ec7509644a583e6f8d097d3cfd`. Block 12.6 merged by [PR #17](https://github.com/sanmirgabriel/mimic/pull/17), base `6350d7c18053dbf3c915ca8cf71f0a3d12bd42ea`. Block 13 merged by [PR #18](https://github.com/sanmirgabriel/mimic/pull/18), base `93bd6807b71fd8859a2e202dd02b6ac75020f1b4`. Block 14 is current work.**
 Older audit notes below record their pre-merge state; this table is the current
-source of truth for delivery status. No Block 14 implementation has started.
+source of truth for delivery status. Block 14 is implemented locally, pending Gate 14.
 
 | Block | Epic | Scope |
 | --- | --- | --- |
@@ -19,8 +19,8 @@ source of truth for delivery status. No Block 14 implementation has started.
 | 12 | Password Popularity / Frequency ✅ (merged PR #15) | Versioned empirical pattern frequencies, with representativeness, licensing and transparent evidence. |
 | 12.5 | Organization Name Intelligence ✅ (merged PR #16) | Bounded compound company/name/alias seeds, component casing and initials through the existing engine; explicit frozen request switch and historical opt-out. |
 | 12.6 | Corporate BR Coverage & Family Diversity ✅ (merged PR #17) | Transparent corporate-br-v1 source resolution and experimental, independent diverse-v1 selection; fixed causal families, bounded retention and synthetic offline evaluation. |
-| 13 | Hashcat Convergence (Gate completed locally; ready for commit review) | Differentially verified, honest rule/base exports aligned with supported existing transformations. |
-| 14 | Service Catalog Expansion | Grow reviewed technology/default-credential knowledge with sources, applicability and versions. |
+| 13 | Hashcat Convergence ✅ (merged PR #18) | Differentially verified, honest rule/base exports aligned with supported existing transformations. |
+| 14 | Service Catalog Expansion (implemented; Gate 14 pending) | Grow reviewed technology/default-credential knowledge with sources, applicability and versions. |
 | 15 | Offline Password Quality Audit | Local analysis of authorized password-quality samples, policy compliance, weak patterns and aggregated reuse. |
 | 16 | Effectiveness Benchmark | Reproducible Recall@K, latency, memory, evaluated-candidate and pattern-coverage measurements. |
 | 17 | Audit Reports & Explainability | Local HTML/PDF reports, redaction, provenance, methodology and honest limitations. |
@@ -462,7 +462,7 @@ The product is **usable now** as a local candidate generator and passive service
   limitations and variable performance remain explicit; diverse-v1 stays opt-in.
 - See [Gate 12.6 audit](GATE12_6_AUDIT.md). No commit, push, merge or Block 13 work.
 
-## Block 13 — Hashcat Convergence (current)
+## Block 13 — Hashcat Convergence (merged PR #18)
 
 - Explicit paired CLI bundle consumes the existing engine and records compatibility
   scope, digests, materialization, omitted values and optional real --stdout checks.
@@ -489,3 +489,32 @@ The product is **usable now** as a local candidate generator and passive service
   84 adversarial Gate cases. Runtime CI 3.10/3.11/3.12 remains for the subsequent PR.
 - See [Gate 13 audit](GATE13_AUDIT.md). Ready for operator commit review;
   no commit, push, merge or Block 14 work. Blocks 14–21 retain their scope.
+
+
+## Block 14 — Service Catalog Expansion (implemented; Gate 14 audited)
+
+- Base is PR #18 merge `93bd6807b71fd8859a2e202dd02b6ac75020f1b4`.
+  Its post-merge main CI [run 38909323305](https://github.com/sanmirgabriel/mimic/actions/runs/38909323305)
+  completed successfully on Python 3.10/3.11/3.12, checked 2026-10-16.
+- Append Zabbix, SonarQube Server, Jenkins, Apache Tomcat, Redis and OpenSearch
+  with official evidence, deployment/version limitations and small opt-in profiles.
+  Only Zabbix and SonarQube receive documented initial pairs. The other four
+  explain generated/configured/demo/ACL authentication without invented defaults.
+- service-catalog-v2 preserves the exact v1 view and historical record revisions.
+  Common-v1, old profile operands, requests, Jobs, engine, ranking, families,
+  caps and Hashcat behavior remain unchanged; no database/dependency changes.
+- Existing CLI and localized Web support discovery, evidence, CSV and explicit
+  generation navigation. See [ADR 0014](adr/0014-service-catalog-expansion.md)
+  and [implementation report](BLOCK14_IMPLEMENTATION_REPORT.md) for validation.
+- No commit, push or merge. Block 15 is not started; Blocks 15–21 retain their
+  original scope and order.
+
+### Gate 14 outcome (2026-10-16)
+
+- Independent official-source review, exact-base records and 77 historical
+  generation cases, eight genuine old Jobs, three hash seeds, real Firefox
+  (132 layouts) and fresh offline wheel/sdist installs passed.
+- Fixed one reproduced Low-severity CSV descriptor leak on fdopen failure;
+  no catalog facts, generation/ranking or Hashcat contracts changed by the Gate.
+- Final suite: 2,096 passed, retaining all 1,954 historical test node IDs.
+  See [Gate 14 audit](GATE14_AUDIT.md) for evidence, limits and final decision.
