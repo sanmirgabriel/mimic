@@ -1,11 +1,11 @@
 # MIMIC product backlog
 
-Canonical product backlog and delivery direction, updated 2026-10-15. Blocks
+Canonical product backlog and delivery direction, updated 2026-10-16. Blocks
 7–12 are merged in `main` (Block 11: PR #14; Block 12: [PR #15](https://github.com/sanmirgabriel/mimic/pull/15),
 merge `6398108f8699cd24068d06d39cf964671bab8354`). PR #15 CI passed on
-Python 3.10/3.11/3.12. **Block 12.5 merged by [PR #16](https://github.com/sanmirgabriel/mimic/pull/16), base `a0a10f19019957ec7509644a583e6f8d097d3cfd`. Block 12.6 Gate completed locally; ready for operator commit review.**
+Python 3.10/3.11/3.12. **Block 12.5 merged by [PR #16](https://github.com/sanmirgabriel/mimic/pull/16), base `a0a10f19019957ec7509644a583e6f8d097d3cfd`. Block 12.6 merged by [PR #17](https://github.com/sanmirgabriel/mimic/pull/17), base `6350d7c18053dbf3c915ca8cf71f0a3d12bd42ea`. Block 13 is current work.**
 Older audit notes below record their pre-merge state; this table is the current
-source of truth for delivery status. No Block 13 implementation has started.
+source of truth for delivery status. No Block 14 implementation has started.
 
 | Block | Epic | Scope |
 | --- | --- | --- |
@@ -18,8 +18,8 @@ source of truth for delivery status. No Block 13 implementation has started.
 | 11 | Observed Password Pattern Learning ✅ (merged PR #14) | Bounded local authorized analysis, versioned aggregate artifacts, CLI analyze/show, read-only Web lookup and explicit structural filtering through the existing engine. |
 | 12 | Password Popularity / Frequency ✅ (merged PR #15) | Versioned empirical pattern frequencies, with representativeness, licensing and transparent evidence. |
 | 12.5 | Organization Name Intelligence ✅ (merged PR #16) | Bounded compound company/name/alias seeds, component casing and initials through the existing engine; explicit frozen request switch and historical opt-out. |
-| 12.6 | Corporate BR Coverage & Family Diversity (Gate completed locally; ready for commit review) | Transparent corporate-br-v1 source resolution and experimental, independent diverse-v1 selection; fixed causal families, bounded retention and synthetic offline evaluation. |
-| 13 | Hashcat Convergence | Differentially verified, honest rule/base exports aligned with supported existing transformations. |
+| 12.6 | Corporate BR Coverage & Family Diversity ✅ (merged PR #17) | Transparent corporate-br-v1 source resolution and experimental, independent diverse-v1 selection; fixed causal families, bounded retention and synthetic offline evaluation. |
+| 13 | Hashcat Convergence (Gate completed locally; ready for commit review) | Differentially verified, honest rule/base exports aligned with supported existing transformations. |
 | 14 | Service Catalog Expansion | Grow reviewed technology/default-credential knowledge with sources, applicability and versions. |
 | 15 | Offline Password Quality Audit | Local analysis of authorized password-quality samples, policy compliance, weak patterns and aggregated reuse. |
 | 16 | Effectiveness Benchmark | Reproducible Recall@K, latency, memory, evaluated-candidate and pattern-coverage measurements. |
@@ -461,3 +461,31 @@ The product is **usable now** as a local candidate generator and passive service
   deterministic results are verified. Known coverage/concentration/recall-loss
   limitations and variable performance remain explicit; diverse-v1 stays opt-in.
 - See [Gate 12.6 audit](GATE12_6_AUDIT.md). No commit, push, merge or Block 13 work.
+
+## Block 13 — Hashcat Convergence (current)
+
+- Explicit paired CLI bundle consumes the existing engine and records compatibility
+  scope, digests, materialization, omitted values and optional real --stdout checks.
+- Identical observed rule sets define base groups, preventing unintended Cartesian
+  extras under Policy/caps/dedup. Python Case/Leet/Unicode/structures and independent
+  Reverse/Ready outputs are materialized; native new rules compile Affix only.
+- Default strict export rejects unrepresentable values. Explicit partial mode
+  counts omissions; identity-only material is labelled literal, without compression
+  claims. Optional Hashcat 6.2.6 differential validation uses no hashes.
+- Historical standalone --export-rules bytes, normal wordlists, requests, Jobs,
+  Web/API, score-v1, diverse-v1 and Corporate BR behavior remain unchanged.
+- See [ADR 0013](adr/0013-hashcat-convergence.md) and
+  [implementation report](BLOCK13_IMPLEMENTATION_REPORT.md). Blocks 14–21 retain
+  their original scope. No commit, push, merge or Block 14 work.
+
+### Gate 13 outcome (2026-10-16)
+
+- Corrected empty external-verification claims, bounded Hashcat stdout/stderr and
+  process cleanup, and rejection of empty CLI bundle destinations. Engine,
+  compiler grouping, mutators, scoring, diverse-v1 and presets remain unchanged.
+- Real Hashcat differential fixtures, historical outputs/Jobs/CLI, deterministic
+  bundles and offline external wheel/sdist installations pass local validation.
+- Final suite: **1,954 passed**, preserving all 1,870 initial nodes and adding
+  84 adversarial Gate cases. Runtime CI 3.10/3.11/3.12 remains for the subsequent PR.
+- See [Gate 13 audit](GATE13_AUDIT.md). Ready for operator commit review;
+  no commit, push, merge or Block 14 work. Blocks 14–21 retain their scope.
