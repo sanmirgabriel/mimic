@@ -307,3 +307,43 @@ increases work even for Quick; caps, full Leet and Policy can prevent coverage.
 
 See [Block 12.6](docs/BLOCK12_6_IMPLEMENTATION_REPORT.md) for evaluation,
 configuration precedence, exact compatibility and limitations.
+
+
+### Local service catalog
+
+`mimic services list`, `mimic services list --search Jenkins` and
+`mimic services show redis` inspect the packaged catalog without network access.
+`service-catalog-v2` includes the original seven services plus Zabbix, SonarQube
+Server, Jenkins, Apache Tomcat, Redis and OpenSearch. Search accepts IDs, names,
+aliases, product tokens and English description/category terms such as CI/CD.
+The PT-BR/EN Web catalog is available at `/services`.
+
+`mimic credentials list --service zabbix` displays the documented initial
+Admin/zabbix pair for the Zabbix 7.4 frontend quickstart, with its immediate
+password-change recommendation. SonarQube Server 2025.1 Developer/Enterprise
+initial Docker/ZIP setup documents admin/admin and asks for a password change.
+Grafana and RabbitMQ retain their existing source-qualified records. These
+records do not establish validity in an operator's installation. Jenkins,
+Tomcat, Redis and OpenSearch have authentication notes without an associated
+pair: generated bootstrap secrets, explicitly configured accounts, OSS/Cloud
+ACL differences and new demo-cluster custom passwords require separate context.
+
+```bash
+mimic credentials export --service zabbix --format csv --output zabbix.csv
+mimic generate --organization Synthetic --service zabbix --reference-year 2026
+```
+
+CSV includes official source URLs, version scope and all applicability
+restrictions. Existing destinations are preserved; formula-like cells receive a
+leading apostrophe for spreadsheet safety. Product profiles contribute contextual
+terms only when explicitly selected. Documented pairs never feed the engine;
+`--include-common-passwords` controls the separate, unchanged common-v1 list.
+No login, scanning, authentication checks or runtime source downloads occur.
+
+The exact seven-service/two-pair historical view remains available to Python
+callers with `list_services(version="service-catalog-v1")`,
+`list_credentials(version="service-catalog-v1")` and
+`credentials_csv(version="service-catalog-v1")` from `mimic.intelligence.catalog`.
+Old records retain their revision IDs; the expanded view does not relabel them.
+See [ADR 0014](docs/adr/0014-service-catalog-expansion.md) and the
+[Block 14 report](docs/BLOCK14_IMPLEMENTATION_REPORT.md) for source scope and checks.

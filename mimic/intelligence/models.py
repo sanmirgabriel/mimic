@@ -1,6 +1,7 @@
 """Small serializable knowledge configuration; no transport or domain objects."""
 
 from dataclasses import asdict, dataclass
+from unicodedata import category
 
 
 @dataclass(frozen=True)
@@ -48,7 +49,7 @@ class ServiceProfile:
 def _text(value: str, field: str) -> None:
     if (not isinstance(value, str) or not value.strip() or len(value) > 4096 or
             any(ord(c) < 32 or 127 <= ord(c) <= 159 or 0xD800 <= ord(c) <= 0xDFFF
-                or c in '\u2028\u2029' for c in value)):
+                or c in '\u2028\u2029' or category(c) == 'Cf' for c in value)):
         raise ValueError(f"{field} must be nonempty text of at most 4096 characters without controls or line breaks")
 
 

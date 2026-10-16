@@ -649,6 +649,7 @@ def _catalog_command(kind: str, argv: list[str]) -> int:
                 print(f"Documented defaults: {len(catalog.list_credentials(service.id))}")
                 print("Authentication notes: " + service.authentication_notes)
                 print("Catalog version: " + service.catalog_version)
+                print("Contextual profile version: " + profile.version)
                 for title, url in service.references:
                     print(f"Source: {title} — {url}")
             return 0
@@ -661,13 +662,17 @@ def _catalog_command(kind: str, argv: list[str]) -> int:
             descriptor, staged = tempfile.mkstemp(prefix='.mimic-catalog-', suffix='.part',
                                                   dir=Path(args.output).absolute().parent)
             try:
-                with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as output:
+                # Keep raw descriptor ownership here, including fdopen failure.
+                with os.fdopen(descriptor, "w", encoding="utf-8", newline="", closefd=False) as output:
                     output.write(content)
                     output.flush()
                     os.fsync(output.fileno())
                 os.link(staged, args.output)
             finally:
-                Path(staged).unlink()
+                try:
+                    os.close(descriptor)
+                finally:
+                    Path(staged).unlink()
             print(f"Exported {args.category} catalog to {args.output}")
             return 0
         if args.category == "common":

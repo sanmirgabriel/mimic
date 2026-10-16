@@ -15,18 +15,18 @@ from mimic.cli import main
 def test_catalog_identity_relationships_and_deterministic_order():
     catalog.validate_catalog()
     ids = ['wordpress', 'mysql', 'postgresql', 'mssql', 'windows-ad', 'grafana', 'rabbitmq']
-    assert [s.id for s in catalog.list_services()] == ids
-    assert [p.id for p in SERVICE_PROFILES] == ids
-    assert [c.id for c in catalog.list_credentials()] == ['grafana-initial-admin', 'rabbitmq-initial-guest']
+    assert [s.id for s in catalog.list_services(version="service-catalog-v1")] == ids
+    assert [p.id for p in SERVICE_PROFILES[:7]] == ids
+    assert [c.id for c in catalog.list_credentials(version="service-catalog-v1")] == ['grafana-initial-admin', 'rabbitmq-initial-guest']
     for service in catalog.SERVICES:
-        assert service.catalog_version == catalog.CATALOG_VERSION
+        assert service.catalog_version in catalog.CATALOG_VERSIONS
         assert service.description and service.authentication_notes and service.references
         assert all(url.startswith('https://') for title, url in service.references)
     for credential in catalog.DEFAULT_CREDENTIALS:
         assert credential.type == 'documented_default'
         assert credential.source_title and credential.source_url and credential.applicability
         assert credential.restrictions and credential.record_version
-        assert credential.service_id in ids
+        assert credential.service_id in {s.id for s in catalog.SERVICES}
     assert catalog.common_vocabulary().type == 'common_value'
 
 

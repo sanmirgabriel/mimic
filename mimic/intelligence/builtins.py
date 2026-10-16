@@ -6,7 +6,7 @@ KNOWLEDGE_VERSION = "knowledge-v1"
 COMMON_NUMBERS = ("123", "321", "1234", "4321", "12345", "123456",
                   "000", "0000", "111", "1111")
 CORPORATE_ROLES = ("admin", "administrator", "support", "helpdesk", "IT", "suporte")
-SERVICE_PROFILES = (
+SERVICE_PROFILES_V1 = (
     ServiceProfile("wordpress", "WordPress", ("WordPress", "wp"), ("admin", "editor"), KNOWLEDGE_VERSION),
     ServiceProfile("mysql", "MySQL", ("mysql", "sql", "db"), ("root", "dba"), KNOWLEDGE_VERSION),
     ServiceProfile("postgresql", "PostgreSQL", ("postgresql", "postgres", "db"), ("postgres", "dba"), KNOWLEDGE_VERSION),
@@ -14,6 +14,19 @@ SERVICE_PROFILES = (
     ServiceProfile("windows-ad", "Windows / Active Directory", ("windows", "AD"), ("administrator", "svc"), KNOWLEDGE_VERSION),
     ServiceProfile("grafana", "Grafana", ("grafana",), ("admin", "viewer"), KNOWLEDGE_VERSION),
     ServiceProfile("rabbitmq", "RabbitMQ", ("rabbitmq", "amqp"), ("guest",), KNOWLEDGE_VERSION),
+)
+
+
+# knowledge-v1 still identifies the unchanged planning rules/common operands.
+# Existing service IDs are immutable; the six new operands have a new revision.
+EXPANDED_KNOWLEDGE_VERSION = "knowledge-v2"
+SERVICE_PROFILES = SERVICE_PROFILES_V1 + (
+    ServiceProfile("zabbix", "Zabbix", ("zabbix",), ("Admin",), EXPANDED_KNOWLEDGE_VERSION),
+    ServiceProfile("sonarqube", "SonarQube Server", ("sonarqube", "sonar"), ("admin",), EXPANDED_KNOWLEDGE_VERSION),
+    ServiceProfile("jenkins", "Jenkins", ("jenkins",), ("administrator",), EXPANDED_KNOWLEDGE_VERSION),
+    ServiceProfile("tomcat", "Apache Tomcat", ("tomcat",), ("manager-gui",), EXPANDED_KNOWLEDGE_VERSION),
+    ServiceProfile("redis", "Redis", ("redis",), ("default",), EXPANDED_KNOWLEDGE_VERSION),
+    ServiceProfile("opensearch", "OpenSearch", ("opensearch",), ("admin",), EXPANDED_KNOWLEDGE_VERSION),
 )
 
 

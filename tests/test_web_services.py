@@ -136,7 +136,7 @@ def test_common_only_form_is_opt_in_and_csrf_protected(client):
 def test_catalog_translation_parity_and_complete_metadata():
     assert TRANSLATIONS['pt-BR'].keys() == TRANSLATIONS['en'].keys()
     keys = [key for key in TRANSLATIONS['en'] if key.startswith('catalog.') or key == 'nav.services']
-    assert len(keys) == 72
+    assert len(keys) == 106
     for key in keys:
         pt, en = TRANSLATIONS['pt-BR'][key], TRANSLATIONS['en'][key]
         fields = lambda value: {field for _, field, _, _ in Formatter().parse(value) if field is not None}

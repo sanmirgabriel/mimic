@@ -1,1 +1,2 @@
 include tests/fixtures/br-workplace.txt
+include tests/fixtures/service-catalog-v1.json
